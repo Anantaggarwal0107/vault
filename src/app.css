@@ -1,0 +1,337 @@
+/*
+  Vault: a card-catalog drawer for things you saved.
+  Ground is indigo night; each source carries its own accent so you always know
+  which drawer you're in. Gold is reserved for favourites.
+*/
+:root {
+  --night: #1a1730;
+  --dusk: #221e3a;
+  --dusk-2: #2b2649;
+  --seam: #3a345c;
+  --paper: #eeeaf8;
+  --mist: #aaa4c7;
+  --faint: #8580a8;
+
+  --ig: #ff7a8a;
+  --x: #79c2ff;
+  --gold: #f5c451;
+  --ig-mark: #d9506c;
+  --x-mark: #3b8fd6;
+
+  --accent: var(--ig);
+  --accent-mark: var(--ig-mark);
+  --on-accent: #1a1730;
+
+  --display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', system-ui, sans-serif;
+  --body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+
+  --r-row: 14px;
+  --r-ctl: 10px;
+  --nav-h: 64px;
+  --content: 680px;
+
+  color-scheme: dark;
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--paper);
+  background: var(--night);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-source='x'] {
+  --accent: var(--x);
+  --accent-mark: var(--x-mark);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--night);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(1.9rem, 6vw, 2.5rem);
+}
+
+h2 {
+  font-size: 1.35rem;
+}
+
+h3 {
+  font-size: 1.05rem;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* ── controls ─────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--seam);
+  background: var(--dusk-2);
+  color: var(--paper);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s, transform 0.08s;
+}
+
+.btn:hover {
+  background: #352f57;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent);
+}
+
+.btn.primary:hover {
+  filter: brightness(1.06);
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn.danger {
+  border-color: #8c3a4f;
+  color: #ffb3c0;
+}
+
+.btn.block {
+  width: 100%;
+}
+
+.btn.lg {
+  min-height: 56px;
+  font-size: 1.1rem;
+  border-radius: 16px;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-ctl);
+  border: none;
+  background: transparent;
+  color: var(--mist);
+  cursor: pointer;
+  flex: none;
+}
+
+.icon-btn:hover {
+  background: var(--dusk-2);
+  color: var(--paper);
+}
+
+.icon-btn.on-fav {
+  color: var(--gold);
+}
+
+.icon-btn.on-del {
+  color: var(--paper);
+  background: #4a3550;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--mist);
+}
+
+.input,
+.select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--seam);
+  background: var(--dusk);
+  color: var(--paper);
+  font-size: 1rem;
+}
+
+.select {
+  appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%23aaa4c7' stroke-width='2'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.input::placeholder {
+  color: var(--faint);
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Segmented control (pools, tabs) */
+.segmented {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--dusk);
+  border: 1px solid var(--seam);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.segmented button {
+  flex: 1 0 auto;
+  min-height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--mist);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.segmented button[aria-pressed='true'],
+.segmented button[aria-selected='true'] {
+  background: var(--dusk-2);
+  color: var(--paper);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--seam);
+  background: transparent;
+  color: var(--paper);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.chip .n {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent);
+}
+
+.chip[aria-pressed='true'] .n {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.muted {
+  color: var(--mist);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.stack {
+  display: grid;
+  gap: 16px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.panel {
+  border: 1px solid var(--seam);
+  border-radius: 16px;
+  background: var(--dusk);
+  padding: 16px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
