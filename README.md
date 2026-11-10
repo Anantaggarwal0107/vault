@@ -16,11 +16,11 @@ npm run build      # static site in dist/
 
 ## Google Drive sync (optional)
 
-Favourites and gone marks can sync through a hidden app folder in the user's own Google Drive ( scope, which Google treats as non-sensitive). To turn it on:
+Favourites and gone marks can sync through a hidden app folder in the user's own Google Drive (`drive.appdata` scope, which Google treats as non-sensitive). To turn it on:
 
 1. In Google Cloud Console, create an OAuth client of type **Web application**.
-2. Add the site's origin under **Authorized JavaScript origins** and its full URL (with trailing slash) under **Authorized redirect URIs**, e.g.  and . Add  /  for local dev.
-3. Put the client id in  as  (see ), and in the repo's Actions variable  for deploys.
+2. Add the site's origin under **Authorized JavaScript origins** and its full URL (with trailing slash) under **Authorized redirect URIs**, e.g. `https://anantaggarwal0107.github.io` and `https://anantaggarwal0107.github.io/vault/`. Add `http://localhost:5173` / `http://localhost:5173/` for local dev.
+3. Put the client id in `.env.local` as `VITE_GOOGLE_CLIENT_ID` (see `.env.example`), and in the repo's Actions variable `GOOGLE_CLIENT_ID` for deploys.
 
 Without a client id the Drive option is simply hidden.
 
@@ -28,7 +28,7 @@ Without a client id the Drive option is simply hidden.
 
 | Source | Files |
 |---|---|
-| Instagram | export `.zip` (JSON format), `saved_posts.json`, or the old `saved_posts.csv` |
+| Instagram | export `.zip` (HTML or JSON), `saved_posts.html` / `.json`, or the old `saved_posts.csv` |
 | X | archive `.zip`, or `data/like.js` (`like-part1.js`, … are supported) |
 
 ## Layout
