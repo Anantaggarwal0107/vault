@@ -72,6 +72,83 @@ export function parseSavedDate(s: string): number {
   return Date.parse(t);
 }
 
+// Looser variant for the HTML export: "Apr 01, 2021 8:19 am", "Apr 1, 2021, 8:19 AM", "April 1, 2021 at 8:19 PM".
+const LOOSE_RE = /([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s*(\d{4}),?\s*(?:at\s+)?(\d{1,2}):(\d{2})\s*([ap])\.?m\.?/i;
+
+function parseLooseDate(s: string): number {
+  const m = s.match(LOOSE_RE);
+  if (!m) return NaN;
+  const mon = MONTHS[m[1].toLowerCase()];
+  if (mon === undefined) return NaN;
+  let h = Number(m[4]) % 12;
+  if (m[6].toLowerCase() === 'p') h += 12;
+  return new Date(Number(m[3]), mon, Number(m[2]), h, Number(m[5])).getTime();
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;|&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&');
+}
+
+function stripTags(s: string): string {
+  return decodeEntities(s.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Parse the HTML version of saved_posts (Instagram's default export format).
+ * Each saved post is a block headed by the creator's username (<h2>), containing the post
+ * link and the date it was saved. We split on headings and pair links with dates in order.
+ */
+export function parseInstagramHtml(html: string): Item[] {
+  const body = html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, '');
+  const blocks = body.split(/(?=<h2\b)/i);
+  const byKey = new Map<string, Item>();
+  let order = 0;
+  for (const block of blocks) {
+    const heading = block.match(/^<h2\b[^>]*>([\s\S]*?)<\/h2>/i);
+    const author = heading ? stripTags(heading[1]).replace(/^@/, '') : '';
+    const rest = heading ? block.slice(heading[0].length) : block;
+
+    const links: { kind: string; id: string; url: string }[] = [];
+    for (const m of rest.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
+      const url = decodeEntities(m[1]);
+      const parsed = /instagram\.com/i.test(url) ? parsePostUrl(url) : null;
+      if (parsed && !links.some((l) => l.id === parsed.id)) links.push({ ...parsed, url });
+    }
+    if (!links.length) continue;
+
+    const dates: number[] = [];
+    for (const m of stripTags(rest).matchAll(new RegExp(LOOSE_RE.source, 'gi'))) {
+      const t = parseLooseDate(m[0]);
+      if (!Number.isNaN(t)) dates.push(t);
+    }
+
+    links.forEach((l, i) => {
+      const key = `instagram:${l.id}`;
+      if (byKey.has(key)) return;
+      byKey.set(key, {
+        key,
+        source: 'instagram',
+        id: l.id,
+        kind: l.kind,
+        url: l.url,
+        author,
+        text: '',
+        savedAt: dates[i] ?? dates[0] ?? 0,
+        order: order++,
+      });
+    });
+  }
+  return [...byKey.values()];
+}
+
 /**
  * Parse the saved_posts.csv the old app used (post_url, owner_username, saved_date).
  * Row ids are assigned exactly like the old app did (drop empty urls, drop duplicate urls,

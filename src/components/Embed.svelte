@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Item } from '../lib/types';
   import { embedUrl } from '../lib/links';
+  import { isDemo } from '../lib/demo';
 
   let { item }: { item: Item } = $props();
 
@@ -38,6 +39,9 @@
   let fallback = $derived(item.source === 'x' ? 420 : 760);
 </script>
 
+{#if isDemo(item)}
+  <div class="embed sample muted small">This is a sample post. Previews show here for your own posts.</div>
+{:else}
 <div class="embed" class:ready={loaded}>
   {#if !loaded}<div class="placeholder muted small">Loading preview…</div>{/if}
   {#key item.key}
@@ -52,6 +56,7 @@
     ></iframe>
   {/key}
 </div>
+{/if}
 
 <style>
   .embed {
@@ -60,6 +65,11 @@
     overflow: hidden;
     background: var(--dusk);
     border: 1px solid var(--seam);
+  }
+
+  .embed.sample {
+    padding: 28px 20px;
+    text-align: center;
   }
 
   .embed.ready {

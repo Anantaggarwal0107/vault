@@ -6,6 +6,7 @@
   import { downloadBackup, gistConfig, pullGist, pushGist, restoreFile, setGistConfig } from '../lib/sync';
   import { SOURCES, SOURCE_LABEL, type Source } from '../lib/types';
   import Icon from '../components/Icon.svelte';
+  import InstallCard from '../components/InstallCard.svelte';
 
   let confirmDelete = $state<Source | null>(null);
   let restoreInput: HTMLInputElement | undefined = $state();
@@ -48,7 +49,7 @@
       } else if (action === 'pull') syncMsg = await pullGist();
       else {
         await pushGist();
-        syncMsg = 'Uploaded your markers to the gist.';
+        syncMsg = 'Uploaded your favourites to the gist.';
       }
     } catch (e) {
       syncMsg = (e as Error).message;
@@ -61,16 +62,18 @@
     setGistConfig(null);
     connected = false;
     token = '';
-    syncMsg = 'Disconnected. Your markers stay on this device.';
+    syncMsg = 'Disconnected. Your favourites stay on this device.';
   }
 </script>
 
 <div class="stack settings">
   <h1>Settings</h1>
 
+  <InstallCard always />
+
   <section class="panel stack">
-    <h2>Your data</h2>
-    <p class="muted small">Everything is stored in this browser only. Nothing is uploaded unless you turn on gist sync below.</p>
+    <h2>Your posts</h2>
+    <p class="muted small">Everything is kept on this device only. Nothing is uploaded.</p>
     {#each SOURCES as s (s)}
       <div class="data-row" data-source={s}>
         <span class="swatch" aria-hidden="true"></span>
@@ -78,11 +81,10 @@
           <strong>{SOURCE_LABEL[s]}</strong>
           <p class="muted small num">
             {#if vault.items[s].length}
-              {fmtNum(vault.items[s].length)} {s === 'x' ? 'likes' : 'saved posts'}, {fmtNum(vault.count(s, 'fav'))} favourites, {fmtNum(
-                vault.count(s, 'del'),
-              )} marked deleted
+              {fmtNum(vault.items[s].length)} {s === 'x' ? 'liked tweets' : 'saved posts'}, {fmtNum(vault.count(s, 'fav'))} favourites{#if vault.isDemo}
+                (sample){/if}
             {:else}
-              Not imported yet
+              Not added yet
             {/if}
           </p>
         </div>
@@ -96,76 +98,81 @@
         {/if}
       </div>
     {/each}
-    <button class="btn" onclick={() => router.go('import')}><Icon name="upload" size={18} /> Import or update an export</button>
+    <button class="btn" onclick={() => router.go('import')}><Icon name="upload" size={18} /> Add or update posts</button>
   </section>
 
   <section class="panel stack">
-    <h2>Backup your marks</h2>
+    <h2>Back up your favourites</h2>
     <p class="muted small">
-      Favourites and deleted marks are saved by post, so they survive re-importing a newer export. Download a backup to move them to
-      another device.
+      Your favourites stay put when you add a newer download. To move them to a new phone, save a backup file here and open it on the
+      other phone.
     </p>
     <div class="row wrap">
-      <button class="btn" onclick={downloadBackup}>Download backup</button>
-      <button class="btn" onclick={() => restoreInput?.click()}>Restore from file</button>
+      <button class="btn" onclick={downloadBackup}>Save backup file</button>
+      <button class="btn" onclick={() => restoreInput?.click()}>Restore from backup</button>
     </div>
-    <details>
-      <summary class="small">Coming from the old Streamlit app?</summary>
-      <div class="stack inner">
+    {#if restoreMsg}<p class="small" role="status">{restoreMsg}</p>{/if}
+  </section>
+
+  <details class="advanced" open={connected}>
+    <summary><h2>Advanced</h2></summary>
+    <div class="stack">
+      <section class="panel stack">
+        <h3>Sync with a GitHub gist</h3>
         <p class="muted small">
-          The old apps kept marks in <code>~/.insta_vault_markers.json</code> or <code>~/.twitter_vault_markers.json</code>. Import the same
-          export you used there first, then pick which app the file came from and restore it.
+          For people with a GitHub account. Keeps favourites in step across devices using a secret gist and a token with only the
+          <em>gist</em> scope. The token is stored on this device.
+        </p>
+        {#if connected}
+          <p class="small">Connected to gist <code>{gistId}</code>. Changes upload automatically.</p>
+          <div class="row wrap">
+            <button class="btn" disabled={syncBusy} onclick={() => sync('pull')}>Download from gist</button>
+            <button class="btn" disabled={syncBusy} onclick={() => sync('push')}>Upload to gist</button>
+            <button class="btn ghost" onclick={disconnect}>Disconnect</button>
+          </div>
+        {:else}
+          <label class="field">Gist id<input class="input" bind:value={gistId} autocomplete="off" spellcheck="false" /></label>
+          <label class="field"
+            >GitHub token<input class="input" type="password" bind:value={token} autocomplete="off" spellcheck="false" /></label
+          >
+          <button class="btn primary" disabled={syncBusy} onclick={() => sync('connect')}>Connect</button>
+        {/if}
+        {#if syncMsg}<p class="small" role="status">{syncMsg}</p>{/if}
+      </section>
+
+      <section class="panel stack">
+        <h3>Move favourites from the old Streamlit app</h3>
+        <p class="muted small">
+          The old apps kept them in <code>~/.insta_vault_markers.json</code> or <code>~/.twitter_vault_markers.json</code>. First add the
+          same files you used there, then pick which app the file came from and choose <em>Restore from backup</em>.
         </p>
         <div class="segmented" role="group" aria-label="Old file belongs to">
           {#each SOURCES as s (s)}
             <button aria-pressed={legacySource === s} onclick={() => (legacySource = s)}>{SOURCE_LABEL[s]}</button>
           {/each}
         </div>
-      </div>
-    </details>
-    <input
-      bind:this={restoreInput}
-      class="sr-only"
-      type="file"
-      accept=".json"
-      onchange={(e) => {
-        void restore(e.currentTarget.files?.[0]);
-        e.currentTarget.value = '';
-      }}
-    />
-    {#if restoreMsg}<p class="small" role="status">{restoreMsg}</p>{/if}
-  </section>
+        <button class="btn" onclick={() => restoreInput?.click()}>Choose old file</button>
+      </section>
 
-  <section class="panel stack">
-    <h2>Sync with a GitHub gist</h2>
-    <p class="muted small">
-      Optional. Keeps your marks in step across devices, like the old app did. Uses a secret gist and a GitHub token with only the
-      <em>gist</em> scope. The token is stored in this browser.
-    </p>
-    {#if connected}
-      <p class="small">Connected to gist <code>{gistId}</code>. Changes upload automatically.</p>
-      <div class="row wrap">
-        <button class="btn" disabled={syncBusy} onclick={() => sync('pull')}>Download from gist</button>
-        <button class="btn" disabled={syncBusy} onclick={() => sync('push')}>Upload to gist</button>
-        <button class="btn ghost" onclick={disconnect}>Disconnect</button>
-      </div>
-    {:else}
-      <label class="field">Gist id<input class="input" bind:value={gistId} autocomplete="off" spellcheck="false" /></label>
-      <label class="field"
-        >GitHub token<input class="input" type="password" bind:value={token} autocomplete="off" spellcheck="false" /></label
-      >
-      <button class="btn primary" disabled={syncBusy} onclick={() => sync('connect')}>Connect</button>
-    {/if}
-    {#if syncMsg}<p class="small" role="status">{syncMsg}</p>{/if}
-  </section>
+      <section class="stack about">
+        <h3>Keyboard shortcuts</h3>
+        <p class="muted small">
+          On the Random tab: <kbd>R</kbd> or <kbd>Space</kbd> draws, <kbd>F</kbd> favourites, <kbd>D</kbd> marks as gone, <kbd>O</kbd> opens,
+          <kbd>P</kbd> shows the preview, <kbd>I</kbd> shows details.
+        </p>
+      </section>
+    </div>
+  </details>
 
-  <section class="stack about">
-    <h2>Keyboard</h2>
-    <p class="muted small">
-      On the Random tab: <kbd>R</kbd> or <kbd>Space</kbd> draws, <kbd>F</kbd> favourites, <kbd>D</kbd> marks deleted, <kbd>O</kbd> opens,
-      <kbd>P</kbd> toggles the preview, <kbd>I</kbd> shows details.
-    </p>
-  </section>
+  <input
+    bind:this={restoreInput}
+    class="sr-only"
+    type="file"
+    onchange={(e) => {
+      void restore(e.currentTarget.files?.[0]);
+      e.currentTarget.value = '';
+    }}
+  />
 </div>
 
 <style>
@@ -199,10 +206,6 @@
     color: var(--mist);
   }
 
-  .inner {
-    gap: 10px;
-    margin-top: 10px;
-  }
 
   code {
     font-size: 0.85em;
@@ -223,6 +226,37 @@
     font-family: var(--body);
     font-size: 0.8rem;
     color: var(--paper);
+  }
+
+  .advanced summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+  }
+
+  .advanced summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .advanced summary::after {
+    content: '';
+    width: 9px;
+    height: 9px;
+    border-right: 2px solid var(--mist);
+    border-bottom: 2px solid var(--mist);
+    transform: rotate(45deg) translateY(-3px);
+    transition: transform 0.15s;
+  }
+
+  .advanced[open] summary::after {
+    transform: rotate(-135deg) translateY(-3px);
+  }
+
+  .advanced > .stack {
+    margin-top: 12px;
   }
 
   .about {

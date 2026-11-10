@@ -1,5 +1,6 @@
 import type { Item, Marker, MarkKind, Source } from './types';
 import { vault } from './vault.svelte';
+import { DEMO_PREFIX } from './demo';
 
 // ── file format ─────────────────────────────────────────
 
@@ -35,7 +36,9 @@ interface LegacyDoc {
 }
 
 export function markersDoc(): MarkersDoc {
-  return { app: 'vault', version: 2, updatedAt: Date.now(), markers: [...vault.markers.values()], legacyDone: legacyDone() };
+  // Stars on the sample posts are never backed up or synced.
+  const markers = [...vault.markers.values()].filter((m) => !m.key.includes(`:${DEMO_PREFIX}`));
+  return { app: 'vault', version: 2, updatedAt: Date.now(), markers, legacyDone: legacyDone() };
 }
 
 function isMarkersDoc(d: unknown): d is MarkersDoc {
@@ -86,17 +89,17 @@ export async function restoreFile(file: File, legacySource: Source): Promise<str
   const data = JSON.parse(await file.text());
   if (isMarkersDoc(data)) {
     await vault.mergeMarkers(data.markers);
-    return `Restored ${data.markers.length.toLocaleString()} markers.`;
+    return `Restored favourites for ${data.markers.length.toLocaleString()} posts.`;
   }
   if (isLegacyDoc(data)) {
     if (!vault.items[legacySource].length) {
-      throw new Error('Import your data for this source first, then restore the old markers.');
+      throw new Error('Add your posts for this app first, then restore the old file.');
     }
     const { markers, missing } = convertLegacy(data, legacySource);
     await vault.mergeMarkers(markers);
-    return `Migrated ${markers.length.toLocaleString()} old markers${missing ? `, ${missing} could not be matched` : ''}.`;
+    return `Moved favourites for ${markers.length.toLocaleString()} posts from the old app${missing ? ` (${missing} could not be matched)` : ''}.`;
   }
-  throw new Error('This file is not a Vault markers backup.');
+  throw new Error("This isn't a Vault backup file. Choose the file you saved with Save backup file.");
 }
 
 // ── GitHub Gist sync (optional, same idea as the old apps) ──
@@ -191,7 +194,7 @@ async function migrateLegacy(read: GistReader): Promise<{ moved: number; pending
 function pendingNote(pending: Source[]): string {
   if (!pending.length) return '';
   const names = pending.map((s) => (s === 'x' ? 'like.js' : 'saved_posts.csv')).join(' and ');
-  return ` Old marks are waiting to move over: import ${names} (the files the old app used) and they'll be added.`;
+  return ` Favourites from the old app will move over once you add ${names} (the files the old app used).`;
 }
 
 /** Pull markers from the gist and replace local ones. Old-format files are migrated. */
@@ -203,12 +206,12 @@ export async function pullGist(c = gistConfig()): Promise<string> {
   if (isMarkersDoc(doc)) {
     await vault.setAllMarkers(doc.markers, { notify: false });
     setLegacyDone([...new Set([...legacyDone(), ...(doc.legacyDone ?? [])])]);
-    msg = `Synced ${doc.markers.length.toLocaleString()} markers from your gist.`;
+    msg = `Synced favourites for ${doc.markers.length.toLocaleString()} posts from your gist.`;
   } else {
-    msg = 'Gist connected. Your markers were uploaded to it.';
+    msg = 'Gist connected. Your favourites were uploaded to it.';
   }
   const { moved, pending } = await migrateLegacy(read);
-  if (moved) msg = `Moved ${moved.toLocaleString()} markers from your old apps into the new format.`;
+  if (moved) msg = `Moved favourites for ${moved.toLocaleString()} posts from your old apps.`;
   if (moved || !isMarkersDoc(doc)) await pushGist(c);
   return msg + pendingNote(pending);
 }
@@ -219,7 +222,7 @@ export async function migrateAfterImport(): Promise<string> {
   if (!c || (legacyDone().includes('instagram') && legacyDone().includes('x'))) return '';
   const { moved, pending } = await migrateLegacy(await readGist(c));
   if (moved) await pushGist(c);
-  return moved ? `Moved ${moved.toLocaleString()} markers from your old apps.${pendingNote(pending)}` : '';
+  return moved ? `Moved favourites for ${moved.toLocaleString()} posts from your old apps.${pendingNote(pending)}` : '';
 }
 
 let timer: ReturnType<typeof setTimeout> | undefined;

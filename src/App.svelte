@@ -35,7 +35,7 @@
     { page: 'random', label: 'Random', icon: 'dice' },
     { page: 'browse', label: isIG ? 'Timeline' : 'Search', icon: isIG ? 'list' : 'search' },
     { page: 'people', label: isIG ? 'Creators' : 'Tags', icon: isIG ? 'people' : 'hash' },
-    { page: 'marked', label: 'Marked', icon: 'star' },
+    { page: 'marked', label: 'Favourites', icon: 'star' },
     { page: 'stats', label: 'Stats', icon: 'chart' },
   ]);
 
@@ -92,8 +92,17 @@
   {/if}
 
   <main>
+    {#if vault.loaded && vault.isDemo && page !== 'import'}
+      <aside class="demo-banner">
+        <span>You're looking at sample posts.</span>
+        <a class="btn primary" href="#/import">Add your own</a>
+      </aside>
+    {/if}
     {#if loadError}
-      <p class="muted" role="alert">Couldn't open the local database: {loadError}. Private browsing modes can block it.</p>
+      <p class="muted" role="alert">
+        Vault couldn't open its storage on this browser ({loadError}). If you're in a private or incognito window, open Vault in a normal
+        one.
+      </p>
     {:else if !vault.loaded}
       <p class="muted loading">Opening your vault…</p>
     {:else if showImport}
@@ -197,6 +206,23 @@
     padding: 20px 16px calc(var(--nav-h) + 32px + env(safe-area-inset-bottom));
   }
 
+  .demo-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 10px 10px 10px 16px;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--gold) 16%, var(--dusk));
+    border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+    font-weight: 700;
+  }
+
+  .demo-banner .btn {
+    min-height: 38px;
+  }
+
   .loading {
     padding: 40px 0;
     text-align: center;
@@ -215,7 +241,7 @@
     bottom: 0;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     height: calc(var(--nav-h) + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
     background: var(--night);
@@ -235,6 +261,13 @@
 
   .tabs a[aria-current='page'] {
     color: var(--paper);
+  }
+
+  .tabs a span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .tabs a[aria-current='page'] :global(svg) {

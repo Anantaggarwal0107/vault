@@ -1,4 +1,5 @@
 import { db } from './db';
+import { DEMO_PREFIX, demoItems, isDemo } from './demo';
 import { hashtags, mentions } from './text';
 import type { Item, Marker, MarkKind, Pool, Source } from './types';
 
@@ -61,6 +62,31 @@ class Vault {
   async deleteSource(source: Source) {
     await db.items.where('source').equals(source).delete();
     this.items = { ...this.items, [source]: [] };
+  }
+
+  // ── sample data ──────────────────────────────────────
+
+  /** True while the vault holds the sample posts instead of real ones. */
+  get isDemo(): boolean {
+    return [this.items.instagram[0], this.items.x[0]].some((i) => i && isDemo(i));
+  }
+
+  async loadDemo() {
+    const d = demoItems();
+    await this.replaceItems('instagram', d.instagram);
+    await this.replaceItems('x', d.x);
+    this.setSource('instagram');
+  }
+
+  /** Remove the sample posts and any stars put on them. */
+  async clearDemo() {
+    for (const s of ['instagram', 'x'] as Source[]) {
+      if (this.items[s][0] && isDemo(this.items[s][0])) await this.deleteSource(s);
+    }
+    const keys = [...this.markers.keys()].filter((k) => k.includes(`:${DEMO_PREFIX}`));
+    for (const k of keys) this.markers.delete(k);
+    await db.markers.bulkDelete(keys);
+    this.version++;
   }
 
   // ── markers ──────────────────────────────────────────

@@ -102,7 +102,7 @@
         </button>
         <button class="btn" class:del-on={mark === 'del'} aria-pressed={mark === 'del'} onclick={() => vault.toggle(item!, 'del')}>
           <Icon name="trash" size={20} />
-          {mark === 'del' ? 'Marked deleted' : 'Probably deleted'}
+          {mark === 'del' ? 'Marked as gone' : 'Mark as gone'}
         </button>
       </div>
 

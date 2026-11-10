@@ -9,6 +9,7 @@
   let confirming = $state(false);
   let source = $derived(vault.source);
   let noun = $derived(source === 'x' ? 'tweets' : 'posts');
+  let one = $derived(source === 'x' ? 'tweet' : 'post');
 
   let items = $derived.by(() => {
     void vault.version;
@@ -21,7 +22,7 @@
   async function clearAll() {
     const n = await vault.clear(source, kind);
     confirming = false;
-    ui.toast(kind === 'fav' ? `Cleared ${fmtNum(n)} favourites.` : `Purged ${fmtNum(n)} deleted marks.`);
+    ui.toast(kind === 'fav' ? `Cleared ${fmtNum(n)} favourites.` : `Cleared ${fmtNum(n)} gone ${noun}.`);
   }
 
   $effect(() => {
@@ -32,25 +33,29 @@
 </script>
 
 <div class="stack">
-  <h1>Marked</h1>
+  <h1>{kind === 'fav' ? 'Favourites' : 'Gone'}</h1>
   <div class="segmented" role="tablist">
     <button role="tab" aria-selected={kind === 'fav'} onclick={() => (kind = 'fav')}>
       Favourites <span class="muted num">{fmtNum(vault.count(source, 'fav'))}</span>
     </button>
     <button role="tab" aria-selected={kind === 'del'} onclick={() => (kind = 'del')}>
-      Probably deleted <span class="muted num">{fmtNum(vault.count(source, 'del'))}</span>
+      Gone <span class="muted num">{fmtNum(vault.count(source, 'del'))}</span>
     </button>
   </div>
 
-  <p class="muted small">Most recently marked first.</p>
+  <p class="muted small">
+    {kind === 'fav'
+      ? `${noun[0].toUpperCase() + noun.slice(1)} you starred, newest first.`
+      : `${noun[0].toUpperCase() + noun.slice(1)} that no longer open. Marking them keeps them out of Random.`}
+  </p>
 
   <ItemList
     {items}
     listId="marked-{source}-{kind}"
     {noun}
     empty={kind === 'fav'
-      ? `No favourites yet. Tap the star on any ${noun.slice(0, -1)} to keep it here.`
-      : `Nothing marked yet. Tap the bin on any ${noun.slice(0, -1)} that no longer loads.`}
+      ? `No favourites yet. Tap the star on any ${one} to keep it here.`
+      : `Nothing here yet. If a ${one} won't open any more, tap the bin to move it here.`}
   />
 
   {#if items.length}
@@ -59,18 +64,18 @@
         <div class="panel stack confirm" role="alertdialog" aria-label="Confirm">
           <p>
             {kind === 'fav'
-              ? `Remove all ${fmtNum(items.length)} favourites?`
-              : `Remove all ${fmtNum(items.length)} deleted marks?`}
-            The {noun} stay in your vault, only the marks go. This can't be undone.
+              ? `Remove the star from all ${fmtNum(items.length)} favourites?`
+              : `Clear all ${fmtNum(items.length)} gone ${noun}?`}
+            The {noun} stay in Vault. This can't be undone.
           </p>
           <div class="row">
-            <button class="btn danger" onclick={clearAll}>{kind === 'fav' ? 'Clear favourites' : 'Purge all'}</button>
+            <button class="btn danger" onclick={clearAll}>{kind === 'fav' ? 'Remove all stars' : 'Clear all'}</button>
             <button class="btn ghost" onclick={() => (confirming = false)}>Cancel</button>
           </div>
         </div>
       {:else}
         <button class="btn ghost" onclick={() => (confirming = true)}>
-          {kind === 'fav' ? 'Clear all favourites…' : 'Purge all deleted marks…'}
+          {kind === 'fav' ? 'Remove all stars…' : `Clear all gone ${noun}…`}
         </button>
       {/if}
     </div>

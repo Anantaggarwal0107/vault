@@ -9,8 +9,8 @@
   const MARKERS: { id: Pool; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'fav', label: 'Favourites' },
-    { id: 'unmarked', label: 'Unmarked' },
-    { id: 'del', label: 'Deleted' },
+    { id: 'unmarked', label: 'Unsorted' },
+    { id: 'del', label: 'Gone' },
   ];
 
   let source = $derived(vault.source);

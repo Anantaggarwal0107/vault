@@ -7,12 +7,13 @@
   import Icon from '../components/Icon.svelte';
   import Embed from '../components/Embed.svelte';
   import ItemRow from '../components/ItemRow.svelte';
+  import InstallCard from '../components/InstallCard.svelte';
 
   const POOLS: { id: Pool; label: string }[] = [
     { id: 'all', label: 'Everything' },
     { id: 'fav', label: 'Favourites' },
-    { id: 'unmarked', label: 'Unmarked' },
-    { id: 'del', label: 'Deleted' },
+    { id: 'unmarked', label: 'Unsorted' },
+    { id: 'del', label: 'Gone' },
   ];
 
   let source = $derived(vault.source);
@@ -90,6 +91,7 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="random">
+  {#if !vault.isDemo}<InstallCard />{/if}
   <div class="segmented" role="group" aria-label="Draw from">
     {#each POOLS as p (p.id)}
       <button aria-pressed={pool === p.id} onclick={() => setPool(p.id)}>{p.label}</button>
@@ -111,7 +113,7 @@
             <span class="stamp-v num">{fmtDate(pick.savedAt)}</span>
           </span>
           {#if mark === 'fav'}<span class="badge fav"><Icon name="star" size={16} filled /> Favourite</span>{/if}
-          {#if mark === 'del'}<span class="badge"><Icon name="trash" size={16} /> Probably deleted</span>{/if}
+          {#if mark === 'del'}<span class="badge"><Icon name="trash" size={16} /> Gone</span>{/if}
         </div>
       </article>
     {/key}
@@ -125,13 +127,13 @@
         <Icon name="star" size={20} filled={mark === 'fav'} /><span class="lbl">Favourite</span>
       </button>
       <button class="btn" class:del-on={mark === 'del'} aria-pressed={mark === 'del'} onclick={() => vault.toggle(pick!, 'del')}>
-        <Icon name="trash" size={20} /><span class="lbl">Deleted</span>
+        <Icon name="trash" size={20} /><span class="lbl">Gone</span>
       </button>
       <button class="btn" aria-pressed={ui.showPreview} onclick={() => ui.togglePreview()}>
         <Icon name="eye" size={20} /><span class="lbl">Preview</span>
       </button>
-      <button class="btn" onclick={() => (ui.detail = pick)} aria-label="More details">
-        <Icon name="more" size={20} />
+      <button class="btn" onclick={() => (ui.detail = pick)}>
+        <Icon name="more" size={20} /><span class="lbl">More</span>
       </button>
     </div>
 
@@ -164,7 +166,7 @@
     </section>
   {/if}
 
-  <p class="keys muted small">Keys: <kbd>R</kbd> draw, <kbd>F</kbd> favourite, <kbd>D</kbd> deleted, <kbd>O</kbd> open, <kbd>P</kbd> preview</p>
+  <p class="keys muted small">Keys: <kbd>R</kbd> draw, <kbd>F</kbd> favourite, <kbd>D</kbd> gone, <kbd>O</kbd> open, <kbd>P</kbd> preview</p>
 
   <div class="draw-bar">
     <button class="btn primary lg block draw" onclick={draw}>
@@ -306,7 +308,7 @@
 
   .actions {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr auto;
+    grid-template-columns: repeat(4, 1fr);
     gap: 8px;
   }
 
@@ -328,9 +330,13 @@
     background: #4a3550;
   }
 
-  @media (max-width: 400px) {
-    .lbl {
-      display: none;
+  /* Small phones: stack the label under the icon instead of hiding it. */
+  @media (max-width: 420px) {
+    .actions .btn {
+      flex-direction: column;
+      gap: 2px;
+      min-height: 58px;
+      font-size: 0.74rem;
     }
   }
 

@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseCsv, parseInstagramCsv, parseInstagramJson, parsePostUrl, parseSavedDate } from './instagram';
+import { parseCsv, parseInstagramCsv, parseInstagramHtml, parseInstagramJson, parsePostUrl, parseSavedDate } from './instagram';
+import { readFiles } from './importer';
 import { likesToItems, parseLikeJs } from './x';
 import { hashtags, mentions, previewText, tweetTime } from '../text';
 
@@ -55,6 +56,46 @@ describe('instagram', () => {
       ['alice', 'R1', 'reel', 1617265140000],
       ['bob', 'P2', 'p', 1617265200000],
     ]);
+  });
+});
+
+describe('instagram html export', () => {
+  // Shape of your_instagram_activity/saved/saved_posts.html in Meta's HTML export.
+  const html = `<html><head><title>Saved posts</title><style>.x{}</style></head><body>
+    <div class="_a706" role="main">
+      <div class="pam _3-95 _2ph- _a6-g uiBoxWhite noborder"><h2 class="_3-95 _2pim _a6-h _a6-i">ali&#x2e;ce</h2>
+        <div class="_3-95 _a6-p"><table><tr><td class="_2pin _a6_q">Saved on<div><div>
+          <a target="_blank" href="https://www.instagram.com/reel/R1abc/">https://www.instagram.com/reel/R1abc/</a></div>
+          <div>Apr 01, 2021 8:19 pm</div></div></td></tr></table></div></div>
+      <div class="pam _3-95 _2ph- _a6-g uiBoxWhite noborder"><h2 class="_3-95 _2pim _a6-h _a6-i">bob</h2>
+        <div class="_3-95 _a6-p"><table><tr><td>Saved on<div><div>
+          <a target="_blank" href="https://www.instagram.com/p/P2xyz/?img_index=1">link</a></div>
+          <div>Jan 5, 2024, 10:02 AM</div></div></td></tr></table></div></div>
+    </div></body></html>`;
+
+  it('reads authors, links and dates', () => {
+    const items = parseInstagramHtml(html);
+    expect(items.map((i) => [i.author, i.id, i.kind])).toEqual([
+      ['ali.ce', 'R1abc', 'reel'],
+      ['bob', 'P2xyz', 'p'],
+    ]);
+    const d0 = new Date(items[0].savedAt);
+    expect([d0.getFullYear(), d0.getMonth(), d0.getDate(), d0.getHours()]).toEqual([2021, 3, 1, 20]);
+    const d1 = new Date(items[1].savedAt);
+    expect([d1.getFullYear(), d1.getMonth(), d1.getDate(), d1.getHours()]).toEqual([2024, 0, 5, 10]);
+  });
+
+  it('detects files by content, even when renamed', async () => {
+    const files = [
+      new File([html], 'download (3)'),
+      new File(['window.YTD.like.part0 = [{"like":{"tweetId":"2058068408009413104","fullText":"x"}}]'], 'like.js.txt'),
+      new File(['post_url,owner_username,saved_date\nhttps://www.instagram.com/p/C3/,c,"Apr 03, 2021 8:19 pm"\n'], 'export'),
+      new File(['hello'], 'notes.txt'),
+    ];
+    const r = await readFiles(files);
+    expect(r.instagram?.map((i) => i.id)).toEqual(['R1abc', 'P2xyz', 'C3']);
+    expect(r.x?.length).toBe(1);
+    expect(r.notes).toHaveLength(1);
   });
 });
 

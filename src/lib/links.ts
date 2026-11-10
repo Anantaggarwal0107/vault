@@ -1,4 +1,5 @@
 import type { Item } from './types';
+import { isDemo } from './demo';
 
 const UA = typeof navigator !== 'undefined' ? navigator.userAgent : '';
 export const isAndroid = /android/i.test(UA);
@@ -22,6 +23,8 @@ export function webUrl(item: Item): string {
  * Desktop: the web url.
  */
 export function openUrl(item: Item): string {
+  // Sample posts aren't real, so send people somewhere that exists.
+  if (isDemo(item)) return item.url;
   if (item.source === 'instagram') {
     if (isAndroid) {
       return `intent://www.instagram.com/${igKind(item.kind)}/${item.id}/#Intent;package=com.instagram.android;scheme=https;end;`;

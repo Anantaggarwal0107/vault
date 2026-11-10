@@ -110,7 +110,9 @@
 <style>
   .chart {
     margin: 0;
+    min-width: 0;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 
@@ -218,6 +220,7 @@
 
   .cols {
     position: relative;
+    min-width: 0;
     height: 200px;
     display: flex;
     align-items: flex-end;
@@ -272,6 +275,7 @@
 
   .xlabels {
     display: flex;
+    overflow: hidden;
     gap: 2px;
     height: 24px;
     padding-top: 6px;
@@ -281,6 +285,7 @@
 
   .xlabels span {
     flex: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: visible;
   }

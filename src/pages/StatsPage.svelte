@@ -94,7 +94,7 @@
       <dd class="num">{fmtNum(favs)}</dd>
     </div>
     <div>
-      <dt>Probably deleted</dt>
+      <dt>Gone</dt>
       <dd class="num">{fmtNum(dels)}</dd>
     </div>
   </dl>
@@ -147,7 +147,7 @@
     </section>
   {/if}
 
-  <p class="muted small">Clear favourites or deleted marks from the Marked tab.</p>
+  <p class="muted small">You can clear favourites or gone posts from the Favourites tab.</p>
 </div>
 
 <style>

@@ -1,6 +1,6 @@
 import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
 import type { Item, Source } from '../types';
-import { parseInstagramCsv, parseInstagramJson } from './instagram';
+import { parseInstagramCsv, parseInstagramHtml, parseInstagramJson } from './instagram';
 import { likesToItems, parseLikeJs } from './x';
 
 export interface ImportResult {
@@ -10,15 +10,32 @@ export interface ImportResult {
 }
 
 const LIKE_FILE_RE = /(^|\/)like(?:-part(\d+))?\.js$/i;
-const IG_SAVED_RE = /(^|\/)saved_posts\.json$/i;
+const IG_SAVED_RE = /(^|\/)saved_posts(?:_\d+)?\.(json|html?)$/i;
 
 function likePart(name: string): number {
-  const m = name.match(LIKE_FILE_RE);
-  return m?.[2] ? Number(m[2]) : 0;
+  const m = name.match(/like-part(\d+)/i);
+  return m ? Number(m[1]) : 0;
+}
+
+type Kind = 'zip' | 'like' | 'ig-html' | 'ig-json' | 'ig-csv' | 'unknown';
+
+/**
+ * Work out what a file is from its contents, not its name. Phones rename downloads
+ * ("like(1).js", "like.js.txt", no extension at all), so names can't be trusted.
+ */
+async function sniff(file: File): Promise<Kind> {
+  const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  if (head[0] === 0x50 && head[1] === 0x4b) return 'zip';
+  const text = (await file.slice(0, 4096).text()).replace(/^﻿/, '').trimStart();
+  if (/^window\.YTD\.like\.part\d+/.test(text)) return 'like';
+  if (/^</.test(text)) return 'ig-html';
+  if (/^[[{]/.test(text)) return 'ig-json';
+  if (/^"?post_url"?\s*,/i.test(text)) return 'ig-csv';
+  return 'unknown';
 }
 
 /**
- * Read any mix of: Instagram export zip / saved_posts.json / saved_posts.csv,
+ * Read any mix of: Instagram export zip / saved_posts.html / .json / .csv,
  * X archive zip / like.js. Everything happens in the browser; nothing is uploaded.
  */
 export async function readFiles(files: File[], onStatus?: (msg: string) => void): Promise<ImportResult> {
@@ -27,9 +44,9 @@ export async function readFiles(files: File[], onStatus?: (msg: string) => void)
   const notes: string[] = [];
 
   for (const file of files) {
-    const name = file.name.toLowerCase();
     onStatus?.(`Reading ${file.name}…`);
-    if (name.endsWith('.zip')) {
+    const kind = await sniff(file);
+    if (kind === 'zip') {
       const reader = new ZipReader(new BlobReader(file));
       try {
         const entries = await reader.getEntries();
@@ -41,26 +58,28 @@ export async function readFiles(files: File[], onStatus?: (msg: string) => void)
             found++;
           } else if (IG_SAVED_RE.test(entry.filename)) {
             const text = await entry.getData(new TextWriter());
-            igParts.push(parseInstagramJson(JSON.parse(text)));
+            igParts.push(/\.html?$/i.test(entry.filename) ? parseInstagramHtml(text) : parseInstagramJson(JSON.parse(text)));
             found++;
           }
         }
         if (!found) {
           notes.push(
-            `${file.name}: no saved posts or likes found. For Instagram, make sure you chose JSON format when requesting the download.`,
+            `${file.name} doesn't have any saved posts or likes in it. For Instagram, make sure "Saved" was ticked when you asked for your download. For X, choose the archive zip from X's email.`,
           );
         }
       } finally {
         await reader.close();
       }
-    } else if (name.endsWith('.csv')) {
-      igParts.push(parseInstagramCsv(await file.text()));
-    } else if (name.endsWith('.json')) {
+    } else if (kind === 'like') {
+      likeFiles.push({ part: likePart(file.name), text: await file.text() });
+    } else if (kind === 'ig-html') {
+      igParts.push(parseInstagramHtml(await file.text()));
+    } else if (kind === 'ig-json') {
       igParts.push(parseInstagramJson(JSON.parse(await file.text())));
-    } else if (LIKE_FILE_RE.test(name)) {
-      likeFiles.push({ part: likePart(name), text: await file.text() });
+    } else if (kind === 'ig-csv') {
+      igParts.push(parseInstagramCsv(await file.text()));
     } else {
-      notes.push(`${file.name}: skipped. Expected a .zip, saved_posts.json, saved_posts.csv or like.js file.`);
+      notes.push(`Vault can't read ${file.name}. Choose the zip file Instagram or X emailed you.`);
     }
   }
 
@@ -69,7 +88,9 @@ export async function readFiles(files: File[], onStatus?: (msg: string) => void)
     const byKey = new Map<string, Item>();
     for (const part of igParts) for (const it of part) if (!byKey.has(it.key)) byKey.set(it.key, it);
     instagram = [...byKey.values()];
-    if (!instagram.length) notes.push('No Instagram posts were found in the selected files.');
+    if (!instagram.length) {
+      notes.push("That Instagram file doesn't list any saved posts. Check that \"Saved\" was ticked when you asked for your download.");
+    }
   }
 
   let x: Item[] | null = null;

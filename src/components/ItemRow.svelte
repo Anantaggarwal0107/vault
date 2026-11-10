@@ -34,7 +34,7 @@
       class="icon-btn"
       class:on-del={mark === 'del'}
       aria-pressed={mark === 'del'}
-      aria-label={mark === 'del' ? 'Unmark probably deleted' : 'Mark probably deleted'}
+      aria-label={mark === 'del' ? 'Unmark as gone' : 'Mark as gone (post no longer opens)'}
       onclick={() => vault.toggle(item, 'del')}><Icon name="trash" /></button>
     <a class="btn primary open" href={openUrl(item)} target="_blank" rel="noopener">Open</a>
   </div>
