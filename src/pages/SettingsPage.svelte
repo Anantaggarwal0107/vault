@@ -7,6 +7,8 @@
   import { SOURCES, SOURCE_LABEL, type Source } from '../lib/types';
   import Icon from '../components/Icon.svelte';
   import InstallCard from '../components/InstallCard.svelte';
+  import SyncCard from '../components/SyncCard.svelte';
+  import { drive } from '../lib/drive.svelte';
 
   let confirmDelete = $state<Source | null>(null);
   let restoreInput: HTMLInputElement | undefined = $state();
@@ -71,6 +73,8 @@
 
   <InstallCard always />
 
+  <SyncCard />
+
   <section class="panel stack">
     <h2>Your posts</h2>
     <p class="muted small">Everything is kept on this device only. Nothing is uploaded.</p>
@@ -104,8 +108,8 @@
   <section class="panel stack">
     <h2>Back up your favourites</h2>
     <p class="muted small">
-      Your favourites stay put when you add a newer download. To move them to a new phone, save a backup file here and open it on the
-      other phone.
+      Your favourites stay put when you add a newer download. {drive.available ? 'Google Drive sync is the easiest way to move them to a new phone, or' : 'To move them to a new phone,'} save
+      a backup file here and open it on the other phone.
     </p>
     <div class="row wrap">
       <button class="btn" onclick={downloadBackup}>Save backup file</button>
@@ -119,6 +123,7 @@
     <div class="stack">
       <section class="panel stack">
         <h3>Sync with a GitHub gist</h3>
+        {#if drive.connected}<p class="small">Google Drive sync is on, so gist sync is paused.</p>{/if}
         <p class="muted small">
           For people with a GitHub account. Keeps favourites in step across devices using a secret gist and a token with only the
           <em>gist</em> scope. The token is stored on this device.

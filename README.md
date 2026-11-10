@@ -14,6 +14,16 @@ npm run build      # static site in dist/
 
 `dist/` uses relative paths, so it can be served from any static host (Cloudflare Pages, Netlify, GitHub Pages) or a sub-path. To install it as an app on a phone, open the hosted URL and choose "Add to Home screen".
 
+## Google Drive sync (optional)
+
+Favourites and gone marks can sync through a hidden app folder in the user's own Google Drive ( scope, which Google treats as non-sensitive). To turn it on:
+
+1. In Google Cloud Console, create an OAuth client of type **Web application**.
+2. Add the site's origin under **Authorized JavaScript origins** and its full URL (with trailing slash) under **Authorized redirect URIs**, e.g.  and . Add  /  for local dev.
+3. Put the client id in  as  (see ), and in the repo's Actions variable  for deploys.
+
+Without a client id the Drive option is simply hidden.
+
 ## What it reads
 
 | Source | Files |

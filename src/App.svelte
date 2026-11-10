@@ -4,6 +4,7 @@
   import { router, type Page } from './lib/router.svelte';
   import { ui } from './lib/ui.svelte';
   import { startSync } from './lib/sync';
+  import { drive } from './lib/drive.svelte';
   import { SOURCES, SOURCE_LABEL } from './lib/types';
   import Icon, { type IconName } from './components/Icon.svelte';
   import DetailSheet from './components/DetailSheet.svelte';
@@ -23,6 +24,7 @@
     void navigator.storage?.persist?.().catch(() => {});
     try {
       await vault.load();
+      drive.start();
       const msg = await startSync((m) => ui.toast(m));
       if (msg && !msg.startsWith('Synced')) ui.toast(msg);
     } catch (e) {
@@ -49,6 +51,13 @@
     // A creator page or tag means nothing in the other source.
     if (router.route.arg) router.go(router.route.page);
   }
+
+  // Surface Drive problems once, without nagging on every sync.
+  let lastDriveMsg = '';
+  $effect(() => {
+    if (drive.status === 'error' && drive.message && drive.message !== lastDriveMsg) ui.toast(drive.message);
+    lastDriveMsg = drive.message;
+  });
 
   $effect(() => {
     document.documentElement.dataset.source = vault.source;

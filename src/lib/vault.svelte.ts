@@ -21,6 +21,8 @@ class Vault {
   loaded = $state(false);
 
   markers = new Map<string, Marker>();
+  /** When each mark was taken off, keyed like markers. Lets sync merge devices properly. */
+  removed = new Map<string, number>();
   private listeners = new Set<() => void>();
 
   get list(): Item[] {
@@ -37,7 +39,7 @@ class Vault {
   }
 
   async load() {
-    const [all, markers] = await Promise.all([db.items.toArray(), db.markers.toArray()]);
+    const [all, markers, removed] = await Promise.all([db.items.toArray(), db.markers.toArray(), db.removed.toArray()]);
     const ig: Item[] = [];
     const x: Item[] = [];
     for (const it of all) (it.source === 'x' ? x : ig).push(it);
@@ -45,6 +47,7 @@ class Vault {
     x.sort((a, b) => a.order - b.order);
     this.items = { instagram: ig, x };
     this.markers = new Map(markers.map((m) => [m.key, m]));
+    this.removed = new Map(removed.map((r) => [r.key, r.at]));
     if (!ig.length && x.length) this.setSource('x');
     if (ig.length && !x.length) this.setSource('instagram');
     this.loaded = true;
@@ -98,13 +101,18 @@ class Vault {
   /** Toggle a marker. Favourite and deleted are mutually exclusive, like before. */
   toggle(item: Item, kind: MarkKind) {
     const current = this.markOf(item.key);
+    const at = Date.now();
     if (current === kind) {
       this.markers.delete(item.key);
+      this.removed.set(item.key, at);
       void db.markers.delete(item.key);
+      void db.removed.put({ key: item.key, at });
     } else {
-      const m: Marker = { key: item.key, kind, at: Date.now() };
+      const m: Marker = { key: item.key, kind, at };
       this.markers.set(item.key, m);
+      this.removed.delete(item.key);
       void db.markers.put(m);
+      void db.removed.delete(item.key);
     }
     this.changed();
   }
@@ -113,8 +121,13 @@ class Vault {
     const keys = [...this.markers.values()]
       .filter((m) => m.kind === kind && m.key.startsWith(`${source}:`))
       .map((m) => m.key);
-    for (const k of keys) this.markers.delete(k);
+    const at = Date.now();
+    for (const k of keys) {
+      this.markers.delete(k);
+      this.removed.set(k, at);
+    }
     await db.markers.bulkDelete(keys);
+    await db.removed.bulkPut(keys.map((key) => ({ key, at })));
     this.changed();
     return keys.length;
   }
@@ -132,9 +145,27 @@ class Vault {
 
   /** Add markers without removing existing ones. */
   async mergeMarkers(list: Marker[]) {
-    for (const m of list) this.markers.set(m.key, m);
+    for (const m of list) {
+      this.markers.set(m.key, m);
+      this.removed.delete(m.key);
+    }
     await db.markers.bulkPut(list);
+    await db.removed.bulkDelete(list.map((m) => m.key));
     this.changed();
+  }
+
+  /** Replace marks and removals with the result of a sync merge. Doesn't trigger another sync. */
+  async applySynced(markers: Marker[], removed: [string, number][]) {
+    // Swap the in-memory maps first so a tap during the write lands on the new state.
+    this.markers = new Map(markers.map((m) => [m.key, m]));
+    this.removed = new Map(removed);
+    this.version++;
+    await db.transaction('rw', db.markers, db.removed, async () => {
+      await db.markers.clear();
+      await db.markers.bulkPut(markers);
+      await db.removed.clear();
+      await db.removed.bulkPut(removed.map(([key, at]) => ({ key, at })));
+    });
   }
 
   count(source: Source, kind: MarkKind): number {

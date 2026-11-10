@@ -1,6 +1,7 @@
 import type { Item, Marker, MarkKind, Source } from './types';
 import { vault } from './vault.svelte';
 import { DEMO_PREFIX } from './demo';
+import { drive } from './drive.svelte';
 
 // ── file format ─────────────────────────────────────────
 
@@ -230,12 +231,13 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 /** Start syncing: pull once (unless there are unpushed local changes), then push on every change. */
 export async function startSync(onError: (msg: string) => void): Promise<string> {
   vault.onChange(() => {
-    if (!gistConfig()) return;
+    // Google Drive sync takes over from the gist when it's on.
+    if (!gistConfig() || drive.connected) return;
     localStorage.setItem(DIRTY_KEY, '1');
     clearTimeout(timer);
     timer = setTimeout(() => pushGist().catch((e) => onError(`Sync failed: ${e.message}`)), 1200);
   });
-  if (!gistConfig()) return '';
+  if (!gistConfig() || drive.connected) return '';
   try {
     if (localStorage.getItem(DIRTY_KEY)) {
       await pushGist();

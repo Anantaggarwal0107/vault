@@ -8,6 +8,8 @@
   import Embed from '../components/Embed.svelte';
   import ItemRow from '../components/ItemRow.svelte';
   import InstallCard from '../components/InstallCard.svelte';
+  import SyncCard from '../components/SyncCard.svelte';
+  import { install } from '../lib/install.svelte';
 
   const POOLS: { id: Pool; label: string }[] = [
     { id: 'all', label: 'Everything' },
@@ -91,7 +93,9 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="random">
-  {#if !vault.isDemo}<InstallCard />{/if}
+  {#if !vault.isDemo}
+    {#if install.available && !install.dismissed}<InstallCard />{:else}<SyncCard prompt />{/if}
+  {/if}
   <div class="segmented" role="group" aria-label="Draw from">
     {#each POOLS as p (p.id)}
       <button aria-pressed={pool === p.id} onclick={() => setPool(p.id)}>{p.label}</button>

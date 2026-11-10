@@ -149,7 +149,9 @@
           {#if guide === 'instagram'}
             <p class="muted">
               On the page that opens, tap <b>Download or transfer information</b>, choose your account, then <b>Some of your information</b>.
-              Tick <b>Saved</b>, choose <b>Download to device</b>, set the date range to <b>All time</b> and tap <b>Create files</b>.
+              Instagram ticks every box to start with, so <b>untick everything, then tick only Saved</b> (it's further down the list) and tap
+              <b>Save</b>. Then choose <b>Download to device</b>, set the date range to <b>All time</b> and tap <b>Create files</b>. Leaving
+              the rest unticked keeps the file small and makes it arrive sooner.
             </p>
           {:else}
             <p class="muted">
