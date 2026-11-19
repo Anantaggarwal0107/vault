@@ -1,37 +1,73 @@
 import type { Item } from '../types';
 
-/** Minimal RFC 4180 CSV parser (quoted fields, escaped quotes, CRLF). */
-export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
+/**
+ * Copy a string so it no longer points into the (much bigger) text it was cut from.
+ * JS engines share memory between a string and pieces sliced from it, so 170k small fields
+ * cut from a big export would otherwise keep the whole export alive.
+ */
+export function own(s: string): string {
+  return s === '' ? s : (JSON.parse(JSON.stringify(s)) as string);
+}
+
+/**
+ * Minimal RFC 4180 CSV parser (quoted fields, escaped quotes, CRLF).
+ * Fields are sliced out whole rather than built a character at a time, which matters for
+ * memory on phones when the file has 170k rows.
+ */
+export function* csvRows(text: string): Generator<string[]> {
   let row: string[] = [];
-  let field = '';
-  let quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quoted) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else quoted = false;
-      } else field += c;
-    } else if (c === '"') quoted = true;
-    else if (c === ',') {
-      row.push(field);
-      field = '';
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++;
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = '';
-    } else field += c;
-  }
-  if (field || row.length) {
+  const n = text.length;
+  let i = 0;
+  while (i <= n) {
+    let field: string;
+    if (text.charCodeAt(i) === 34 /* " */) {
+      // Quoted field: find the closing quote, skipping doubled quotes.
+      let j = i + 1;
+      let hasEscapes = false;
+      for (;;) {
+        const q = text.indexOf('"', j);
+        if (q < 0) {
+          j = n;
+          break;
+        }
+        if (text.charCodeAt(q + 1) === 34) {
+          hasEscapes = true;
+          j = q + 2;
+          continue;
+        }
+        j = q;
+        break;
+      }
+      field = text.slice(i + 1, j);
+      if (hasEscapes) field = field.replace(/""/g, '"');
+      i = j + 1;
+    } else {
+      let j = i;
+      while (j < n) {
+        const c = text.charCodeAt(j);
+        if (c === 44 || c === 10 || c === 13) break;
+        j++;
+      }
+      field = text.slice(i, j);
+      i = j;
+    }
     row.push(field);
-    rows.push(row);
+    const c = text.charCodeAt(i);
+    if (c === 44 /* , */) {
+      i++;
+      continue;
+    }
+    // End of line or end of text.
+    if (c === 13 && text.charCodeAt(i + 1) === 10) i++;
+    i++;
+    if (row.length > 1 || row[0] !== '') yield row;
+    row = [];
   }
-  return rows;
+}
+
+/** All rows at once (small files and tests). */
+export function parseCsv(text: string): string[][] {
+  return [...csvRows(text)];
 }
 
 const IG_POST_RE = /^https?:\/\/(?:www\.)?instagram\.com\/(?:[^/?#]+\/)?(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i;
@@ -101,52 +137,122 @@ function stripTags(s: string): string {
   return decodeEntities(s.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 }
 
+/** A link to a post (not a profile), as it appears in an href. */
+const POST_HREF_RE = /href\s*=\s*["'](https?:\/\/(?:www\.)?instagram\.com\/(?:[^/"']+\/)?(?:p|reel|reels|tv)\/[A-Za-z0-9_-]+[^"']*)["']/gi;
+const USERNAME_RE = />\s*Username\s*<\/td>\s*<td\b[^>]*>([\s\S]*?)<\/td>/i;
+const CAPTION_RE = />\s*Caption\s*<\/td>\s*<td\b[^>]*>([\s\S]*?)<\/td>/i;
+const H2_RE = /<h2\b[^>]*>([\s\S]*?)<\/h2>/gi;
+/** Captions are only for searching and reading; long ones are trimmed to keep storage small. */
+const CAPTION_MAX = 600;
+
 /**
- * Parse the HTML version of saved_posts (Instagram's default export format).
- * Each saved post is a block headed by the creator's username (<h2>), containing the post
- * link and the date it was saved. We split on headings and pair links with dates in order.
+ * Streaming reader for the HTML version of saved_posts (Instagram's default export format).
+ * The file can be hundreds of MB, so it's fed in chunks and split into one record per post
+ * link, keeping memory flat however big the export is.
+ *
+ * Current exports put everything inside the record: link, caption, hashtags, an "Owner" table
+ * with the username, and the saved date at the end. Older exports put the username in an <h2>
+ * just before the link instead, so a heading that follows a record's date is carried forward
+ * as the next record's author.
  */
-export function parseInstagramHtml(html: string): Item[] {
-  const body = html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, '');
-  const blocks = body.split(/(?=<h2\b)/i);
-  const byKey = new Map<string, Item>();
-  let order = 0;
-  for (const block of blocks) {
-    const heading = block.match(/^<h2\b[^>]*>([\s\S]*?)<\/h2>/i);
-    const author = heading ? stripTags(heading[1]).replace(/^@/, '') : '';
-    const rest = heading ? block.slice(heading[0].length) : block;
+export class InstagramHtmlReader {
+  private buf = '';
+  private started = false;
+  private heading = '';
+  private byKey = new Map<string, Item>();
+  private order = 0;
 
-    const links: { kind: string; id: string; url: string }[] = [];
-    for (const m of rest.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
-      const url = decodeEntities(m[1]);
-      const parsed = /instagram\.com/i.test(url) ? parsePostUrl(url) : null;
-      if (parsed && !links.some((l) => l.id === parsed.id)) links.push({ ...parsed, url });
+  push(chunk: string) {
+    this.buf += chunk;
+    this.drain(false);
+  }
+
+  finish(): Item[] {
+    this.drain(true);
+    return [...this.byKey.values()];
+  }
+
+  get count(): number {
+    return this.byKey.size;
+  }
+
+  private starts(): number[] {
+    return Array.from(this.buf.matchAll(POST_HREF_RE), (m) => m.index!);
+  }
+
+  private drain(final: boolean) {
+    let pos = this.starts();
+    if (!this.started) {
+      if (!pos.length) return;
+      this.heading = lastHeading(this.buf.slice(0, pos[0]));
+      this.buf = this.buf.slice(pos[0]);
+      pos = pos.map((p) => p - pos[0]);
+      this.started = true;
     }
-    if (!links.length) continue;
+    if (!pos.length) {
+      if (final) this.buf = '';
+      return;
+    }
+    // The last record may still be arriving, so keep it unless this is the end.
+    const complete = final ? pos.length : pos.length - 1;
+    for (let i = 0; i < complete; i++) this.record(this.buf.slice(pos[i], pos[i + 1] ?? this.buf.length));
+    this.buf = final ? '' : this.buf.slice(pos[complete]);
+  }
 
-    const dates: number[] = [];
-    for (const m of stripTags(rest).matchAll(new RegExp(LOOSE_RE.source, 'gi'))) {
+  private record(chunk: string) {
+    const href = chunk.match(/href\s*=\s*["']([^"']+)["']/i);
+    const url = href ? decodeEntities(href[1]) : '';
+    const parsed = parsePostUrl(url);
+
+    const text = stripTags(chunk);
+    let savedAt = 0;
+    let dateText = '';
+    for (const m of text.matchAll(new RegExp(LOOSE_RE.source, 'gi'))) {
       const t = parseLooseDate(m[0]);
-      if (!Number.isNaN(t)) dates.push(t);
+      if (!Number.isNaN(t)) {
+        savedAt = t;
+        dateText = m[0];
+      }
     }
 
-    links.forEach((l, i) => {
-      const key = `instagram:${l.id}`;
-      if (byKey.has(key)) return;
-      byKey.set(key, {
-        key,
-        source: 'instagram',
-        id: l.id,
-        kind: l.kind,
-        url: l.url,
-        author,
-        text: '',
-        savedAt: dates[i] ?? dates[0] ?? 0,
-        order: order++,
-      });
+    const user = chunk.match(USERNAME_RE);
+    const author = (user ? stripTags(user[1]) : this.heading).replace(/^@/, '');
+    const cap = chunk.match(CAPTION_RE);
+    const caption = cap ? stripTags(cap[1]).slice(0, CAPTION_MAX) : '';
+
+    // Old layout: a heading after this record's date names the next record's creator.
+    const dateAt = dateText ? chunk.lastIndexOf(dateText) : -1;
+    this.heading = dateAt >= 0 ? lastHeading(chunk.slice(dateAt)) : '';
+
+    if (!parsed) return;
+    const id = own(parsed.id);
+    const key = own(`instagram:${id}`);
+    if (this.byKey.has(key)) return;
+    this.byKey.set(key, {
+      key,
+      source: 'instagram',
+      id,
+      kind: parsed.kind,
+      url: own(url),
+      author: own(author),
+      text: own(caption),
+      savedAt,
+      order: this.order++,
     });
   }
-  return [...byKey.values()];
+}
+
+function lastHeading(html: string): string {
+  let last = '';
+  for (const m of html.matchAll(H2_RE)) last = stripTags(m[1]);
+  return last;
+}
+
+/** Parse a whole saved_posts.html held in memory (small files and tests). */
+export function parseInstagramHtml(html: string): Item[] {
+  const r = new InstagramHtmlReader();
+  r.push(html);
+  return r.finish();
 }
 
 /**
@@ -155,11 +261,13 @@ export function parseInstagramHtml(html: string): Item[] {
  * drop unparseable dates, then number from 1) so old markers can be migrated.
  */
 export function parseInstagramCsv(text: string): Item[] {
-  const rows = parseCsv(text.replace(/^﻿/, ''));
-  const header = rows.shift()?.map((h) => h.trim().toLowerCase()) ?? [];
+  // Rows are read one at a time so a big file never exists twice in memory.
+  const rows = csvRows(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
+  const header = (rows.next().value as string[] | undefined)?.map((h) => h.trim().toLowerCase()) ?? [];
   const iUrl = header.indexOf('post_url');
   const iUser = header.indexOf('owner_username');
   const iDate = header.indexOf('saved_date');
+  const iCaption = header.indexOf('caption');
   if (iUrl < 0 || iDate < 0) {
     throw new Error('This CSV needs post_url and saved_date columns.');
   }
@@ -185,13 +293,13 @@ export function parseInstagramCsv(text: string): Item[] {
       continue;
     }
     byKey.set(key, {
-      key,
+      key: own(key),
       source: 'instagram',
-      id: parsed.id,
+      id: own(parsed.id),
       kind: parsed.kind,
-      url: url.trim(),
-      author: (iUser >= 0 ? r[iUser] : '')?.trim() ?? '',
-      text: '',
+      url: own(url.trim()),
+      author: own((iUser >= 0 ? r[iUser] : '')?.trim() ?? ''),
+      text: own(iCaption >= 0 ? (r[iCaption] ?? '') : ''),
       savedAt,
       order: order++,
       legacyIds: [legacyId],

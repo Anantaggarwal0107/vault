@@ -81,6 +81,7 @@
           <span class="muted small">{fmtNum(creatorTotal)} saved from this creator</span>
         </button>
         <p class="muted">Saved {fmtDate(item.savedAt)}{#if item.kind === 'reel'}<span class="kind">Reel</span>{/if}</p>
+        {#if item.text}<p class="caption">{item.text}</p>{/if}
       {:else}
         <p class="tweet">{item.text}</p>
         <p class="muted small">Posted {fmtDate(item.savedAt)}<span class="id">ID {item.id}</span></p>
@@ -224,6 +225,16 @@
     white-space: pre-wrap;
     word-break: break-word;
     max-width: 62ch;
+  }
+
+  .caption {
+    color: var(--paper);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 62ch;
+    max-height: 9.5em;
+    overflow-y: auto;
   }
 
   .kind,

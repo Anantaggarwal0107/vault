@@ -95,9 +95,9 @@
     <input
       class="input"
       type="search"
-      placeholder={isIG ? 'Search by username' : 'Keyword, #hashtag or @mention'}
+      placeholder={isIG ? 'Search by username or caption' : 'Keyword, #hashtag or @mention'}
       bind:value={f.query}
-      aria-label={isIG ? 'Search by username' : 'Search tweet text'}
+      aria-label={isIG ? 'Search by username or caption' : 'Search tweet text'}
       autocomplete="off"
     />
   </div>

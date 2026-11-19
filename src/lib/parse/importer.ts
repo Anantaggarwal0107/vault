@@ -1,6 +1,6 @@
 import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
 import type { Item, Source } from '../types';
-import { parseInstagramCsv, parseInstagramHtml, parseInstagramJson } from './instagram';
+import { InstagramHtmlReader, parseInstagramCsv, parseInstagramJson } from './instagram';
 import { likesToItems, parseLikeJs } from './x';
 
 export interface ImportResult {
@@ -10,11 +10,42 @@ export interface ImportResult {
 }
 
 const LIKE_FILE_RE = /(^|\/)like(?:-part(\d+))?\.js$/i;
-const IG_SAVED_RE = /(^|\/)saved_posts(?:_\d+)?\.(json|html?)$/i;
+const IG_SAVED_RE = /(^|\/)saved_posts(?:_\d+)?\.(json|html?|csv)$/i;
 
 function likePart(name: string): number {
   const m = name.match(/like-part(\d+)/i);
   return m ? Number(m[1]) : 0;
+}
+
+/** Feed a byte stream through the HTML reader chunk by chunk, reporting progress. */
+async function readHtmlStream(
+  bytes: ReadableStream<Uint8Array>,
+  total: number,
+  onStatus?: (msg: string) => void,
+): Promise<Item[]> {
+  const reader = new InstagramHtmlReader();
+  let seen = 0;
+  let lastReport = 0;
+  const counted = bytes.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, ctrl) {
+        seen += chunk.byteLength;
+        ctrl.enqueue(chunk);
+      },
+    }),
+  );
+  const text = counted.pipeThrough(new TextDecoderStream() as unknown as TransformStream<Uint8Array, string>).getReader();
+  for (;;) {
+    const { value, done } = await text.read();
+    if (done) break;
+    reader.push(value);
+    if (onStatus && seen - lastReport > 4_000_000) {
+      lastReport = seen;
+      const pct = total ? ` (${Math.min(99, Math.round((seen / total) * 100))}%)` : '';
+      onStatus(`Reading your saved posts… ${reader.count.toLocaleString()} so far${pct}`);
+    }
+  }
+  return reader.finish();
 }
 
 type Kind = 'zip' | 'like' | 'ig-html' | 'ig-json' | 'ig-csv' | 'unknown';
@@ -57,8 +88,18 @@ export async function readFiles(files: File[], onStatus?: (msg: string) => void)
             likeFiles.push({ part: likePart(entry.filename), text: await entry.getData(new TextWriter()) });
             found++;
           } else if (IG_SAVED_RE.test(entry.filename)) {
-            const text = await entry.getData(new TextWriter());
-            igParts.push(/\.html?$/i.test(entry.filename) ? parseInstagramHtml(text) : parseInstagramJson(JSON.parse(text)));
+            if (/\.html?$/i.test(entry.filename)) {
+              // HTML exports can be hundreds of MB: stream them instead of loading them whole.
+              const pipe = new TransformStream<Uint8Array, Uint8Array>();
+              const writing = entry.getData(pipe.writable);
+              const items = await readHtmlStream(pipe.readable, entry.uncompressedSize, onStatus);
+              await writing;
+              igParts.push(items);
+            } else if (/\.csv$/i.test(entry.filename)) {
+              igParts.push(parseInstagramCsv(await entry.getData(new TextWriter())));
+            } else {
+              igParts.push(parseInstagramJson(JSON.parse(await entry.getData(new TextWriter()))));
+            }
             found++;
           }
         }
@@ -73,7 +114,7 @@ export async function readFiles(files: File[], onStatus?: (msg: string) => void)
     } else if (kind === 'like') {
       likeFiles.push({ part: likePart(file.name), text: await file.text() });
     } else if (kind === 'ig-html') {
-      igParts.push(parseInstagramHtml(await file.text()));
+      igParts.push(await readHtmlStream(file.stream(), file.size, onStatus));
     } else if (kind === 'ig-json') {
       igParts.push(parseInstagramJson(JSON.parse(await file.text())));
     } else if (kind === 'ig-csv') {

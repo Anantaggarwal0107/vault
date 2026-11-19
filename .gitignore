@@ -28,3 +28,6 @@ dist-ssr
 saved_posts*
 like*.js
 *.zip
+
+# Local test scripts (reference personal files)
+.scratch/

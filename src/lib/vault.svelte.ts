@@ -54,11 +54,17 @@ class Vault {
     this.version++;
   }
 
-  async replaceItems(source: Source, items: Item[]) {
-    await db.transaction('rw', db.items, async () => {
-      await db.items.where('source').equals(source).delete();
-      await db.items.bulkPut(items);
-    });
+  /**
+   * Swap in a new set of posts for one source. Written in batches: one giant write of
+   * 170k posts briefly needs close to a gigabyte of memory, which phones don't have.
+   */
+  async replaceItems(source: Source, items: Item[], onProgress?: (done: number) => void) {
+    await db.items.where('source').equals(source).delete();
+    const BATCH = 5000;
+    for (let i = 0; i < items.length; i += BATCH) {
+      await db.items.bulkPut(items.slice(i, i + BATCH));
+      onProgress?.(Math.min(items.length, i + BATCH));
+    }
     this.items = { ...this.items, [source]: items };
   }
 
@@ -238,7 +244,10 @@ export const hashtagCounts = memo((items) => countSorted(items.flatMap((i) => ha
 export const mentionCounts = memo((items) => countSorted(items.flatMap((i) => mentions(i.text))));
 
 /** Lowercased text per item, for fast substring search. */
-export const lowerText = memo((items) => items.map((i) => (i.source === 'x' ? i.text : i.author).toLowerCase()));
+// Instagram search covers the creator and the caption; X search covers the tweet text.
+export const lowerText = memo((items) =>
+  items.map((i) => (i.source === 'x' ? i.text : i.text ? `${i.author}\n${i.text}` : i.author).toLowerCase()),
+);
 
 export const dateBounds = memo((items) => {
   let min = Infinity;

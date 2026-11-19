@@ -42,12 +42,14 @@
       if (r.instagram?.length || r.x?.length) await vault.clearDemo();
       if (r.instagram?.length) {
         status = 'Saving your Instagram posts…';
-        await vault.replaceItems('instagram', r.instagram);
+        const igTotal = r.instagram.length;
+        await vault.replaceItems('instagram', r.instagram, (n) => (status = `Saving your Instagram posts… ${Math.round((n / igTotal) * 100)}%`));
         done.push(`${fmtNum(r.instagram.length)} Instagram posts`);
       }
       if (r.x?.length) {
         status = 'Saving your X likes…';
-        await vault.replaceItems('x', r.x);
+        const xTotal = r.x.length;
+        await vault.replaceItems('x', r.x, (n) => (status = `Saving your X likes… ${Math.round((n / xTotal) * 100)}%`));
         done.push(`${fmtNum(r.x.length)} X likes`);
       }
       if (done.length) {

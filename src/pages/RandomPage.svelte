@@ -108,6 +108,7 @@
       <article class="card" class:del={mark === 'del'}>
         {#if pick.source === 'instagram'}
           <button class="who" style:font-size={whoSize} onclick={() => (ui.detail = pick)}>@{pick.author || 'unknown'}</button>
+          {#if pick.text}<p class="caption">{pick.text}</p>{/if}
         {:else}
           <button class="what" onclick={() => (ui.detail = pick)}>{previewText(pick.text)}</button>
         {/if}
@@ -260,6 +261,18 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
     word-break: break-word;
+  }
+
+  .caption {
+    margin-top: -6px;
+    color: var(--mist);
+    line-height: 1.45;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .card.del .who,

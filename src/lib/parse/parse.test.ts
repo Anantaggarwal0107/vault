@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseCsv, parseInstagramCsv, parseInstagramHtml, parseInstagramJson, parsePostUrl, parseSavedDate } from './instagram';
+import { InstagramHtmlReader, parseCsv, parseInstagramCsv, parseInstagramHtml, parseInstagramJson, parsePostUrl, parseSavedDate } from './instagram';
 import { readFiles } from './importer';
 import { likesToItems, parseLikeJs } from './x';
 import { hashtags, mentions, previewText, tweetTime } from '../text';
@@ -84,6 +84,41 @@ describe('instagram html export', () => {
     const d1 = new Date(items[1].savedAt);
     expect([d1.getFullYear(), d1.getMonth(), d1.getDate(), d1.getHours()]).toEqual([2024, 0, 5, 10]);
   });
+
+  // The layout of current exports (2026): everything inside the record, username in an Owner
+  // table, saved date at the end. Data here is made up.
+  const record = (url: string, caption: string, user: string, date: string) =>
+    `<div class="pam _3-95 _2ph- _a6-g uiBoxWhite noborder"><div class="_3-95 _a6-p"><div class="pam _3-95 _2ph- _a6-g uiBoxWhite noborder"><div class="_a6-p"><table style="table-layout: fixed;"><tr><td colspan="2" class="_a6_q">URL<div><a target="_blank" href="${url}">${url}</a></div></td></tr><tr><td class="_a6_q">Caption</td><td class="_2piu _a6_r">${caption}</td></tr><tr><td colspan="2" class="_a6_q"><div><div class="pam _3-95 _2ph- _a6-g uiBoxWhite noborder"><h2 class="_3-95 _2pim _a6-h _a6-i">Hashtags</h2><div class="_a6-p"><div class="_a6-p">funny</div></div></div></div></td></tr><tr><td colspan="2" class="_a6_q"><div><div class="pam _3-95 _2ph- _a6-g uiBoxWhite noborder"><h2 class="_3-95 _2pim _a6-h _a6-i">Owner</h2><div class="_a6-p"><table style="table-layout: fixed;"><tr><td class="_a6_q">Name</td><td class="_2piu _a6_r">Some Name</td></tr><tr><td class="_a6_q">Username</td><td class="_2piu _a6_r">${user}</td></tr></table></div></div></div></td></tr></table></div></div></div><div class="_3-94 _a6-o">${date}</div></div>`;
+  const current =
+    `<html><head><style>body{}</style><title>Saved posts</title></head><body><main class="_a706" role="main">` +
+    record('https://www.instagram.com/p/Aa1bb/', 'Monday mood &#064;work #funny', 'first.user', 'Feb 10, 2018 5:03 am') +
+    record('https://www.instagram.com/reel/Cc2dd/', '', 'second_user', 'Nov 3, 2025 11:45 pm') +
+    `</main></body></html>`;
+
+  it('reads the current export layout: owner username, caption and saved date', () => {
+    const items = parseInstagramHtml(current);
+    expect(items.map((i) => [i.id, i.kind, i.author, i.text])).toEqual([
+      ['Aa1bb', 'p', 'first.user', 'Monday mood @work #funny'],
+      ['Cc2dd', 'reel', 'second_user', ''],
+    ]);
+    const d = new Date(items[1].savedAt);
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()]).toEqual([2025, 10, 3, 23, 45]);
+  });
+
+  it('gives the same result however the file is split into chunks', () => {
+    for (const html of [current, html_old()]) {
+      const whole = parseInstagramHtml(html);
+      for (const size of [7, 64, 333]) {
+        const r = new InstagramHtmlReader();
+        for (let i = 0; i < html.length; i += size) r.push(html.slice(i, i + size));
+        expect(r.finish()).toEqual(whole);
+      }
+    }
+  });
+
+  function html_old() {
+    return html;
+  }
 
   it('detects files by content, even when renamed', async () => {
     const files = [
