@@ -3,24 +3,18 @@
   import { router } from '../lib/router.svelte';
   import { ui } from '../lib/ui.svelte';
   import { fmtNum } from '../lib/text';
-  import { downloadBackup, gistConfig, pullGist, pushGist, restoreFile, setGistConfig } from '../lib/sync';
+  import { favouritesFileName, markersDoc, restoreFile } from '../lib/sync';
+  import { download } from '../lib/compact';
   import { SOURCES, SOURCE_LABEL, type Source } from '../lib/types';
   import Icon from '../components/Icon.svelte';
   import InstallCard from '../components/InstallCard.svelte';
   import SyncCard from '../components/SyncCard.svelte';
-  import { drive } from '../lib/drive.svelte';
+  import CopyCard from '../components/CopyCard.svelte';
 
   let confirmDelete = $state<Source | null>(null);
   let restoreInput: HTMLInputElement | undefined = $state();
   let legacySource = $state<Source>('instagram');
   let restoreMsg = $state('');
-
-  const cfg = gistConfig();
-  let gistId = $state(cfg?.gistId ?? '');
-  let token = $state(cfg?.token ?? '');
-  let connected = $state(!!cfg);
-  let syncBusy = $state(false);
-  let syncMsg = $state('');
 
   async function removeSource(s: Source) {
     await vault.deleteSource(s);
@@ -38,33 +32,8 @@
     }
   }
 
-  async function sync(action: 'connect' | 'pull' | 'push') {
-    syncBusy = true;
-    syncMsg = '';
-    try {
-      if (action === 'connect') {
-        const c = { gistId: gistId.trim(), token: token.trim() };
-        if (!c.gistId || !c.token) throw new Error('Enter both a gist id and a token.');
-        syncMsg = await pullGist(c);
-        setGistConfig(c);
-        connected = true;
-      } else if (action === 'pull') syncMsg = await pullGist();
-      else {
-        await pushGist();
-        syncMsg = 'Uploaded your favourites to the gist.';
-      }
-    } catch (e) {
-      syncMsg = (e as Error).message;
-    } finally {
-      syncBusy = false;
-    }
-  }
-
-  function disconnect() {
-    setGistConfig(null);
-    connected = false;
-    token = '';
-    syncMsg = 'Disconnected. Your favourites stay on this device.';
+  function saveFavourites() {
+    download(new Blob([JSON.stringify(markersDoc())], { type: 'application/json' }), favouritesFileName());
   }
 </script>
 
@@ -105,51 +74,30 @@
     <button class="btn" onclick={() => router.go('import')}><Icon name="upload" size={18} /> Add or update posts</button>
   </section>
 
-  <section class="panel stack">
-    <h2>Back up your favourites</h2>
-    <p class="muted small">
-      Your favourites stay put when you add a newer download. {drive.available ? 'Google Drive sync is the easiest way to move them to a new phone, or' : 'To move them to a new phone,'} save
-      a backup file here and open it on the other phone.
-    </p>
-    <div class="row wrap">
-      <button class="btn" onclick={downloadBackup}>Save backup file</button>
-      <button class="btn" onclick={() => restoreInput?.click()}>Restore from backup</button>
-    </div>
-    {#if restoreMsg}<p class="small" role="status">{restoreMsg}</p>{/if}
-  </section>
 
-  <details class="advanced" open={connected}>
+  <CopyCard />
+
+  <details class="advanced">
     <summary><h2>Advanced</h2></summary>
     <div class="stack">
       <section class="panel stack">
-        <h3>Sync with a GitHub gist</h3>
-        {#if drive.connected}<p class="small">Google Drive sync is on, so gist sync is paused.</p>{/if}
+        <h3>Favourites only</h3>
         <p class="muted small">
-          For people with a GitHub account. Keeps favourites in step across devices using a secret gist and a token with only the
-          <em>gist</em> scope. The token is stored on this device.
+          Save or restore just your favourites and gone posts, without the posts themselves. Restoring merges with what's here: for each
+          post, the newest change wins.
         </p>
-        {#if connected}
-          <p class="small">Connected to gist <code>{gistId}</code>. Changes upload automatically.</p>
-          <div class="row wrap">
-            <button class="btn" disabled={syncBusy} onclick={() => sync('pull')}>Download from gist</button>
-            <button class="btn" disabled={syncBusy} onclick={() => sync('push')}>Upload to gist</button>
-            <button class="btn ghost" onclick={disconnect}>Disconnect</button>
-          </div>
-        {:else}
-          <label class="field">Gist id<input class="input" bind:value={gistId} autocomplete="off" spellcheck="false" /></label>
-          <label class="field"
-            >GitHub token<input class="input" type="password" bind:value={token} autocomplete="off" spellcheck="false" /></label
-          >
-          <button class="btn primary" disabled={syncBusy} onclick={() => sync('connect')}>Connect</button>
-        {/if}
-        {#if syncMsg}<p class="small" role="status">{syncMsg}</p>{/if}
+        <div class="row wrap">
+          <button class="btn" onclick={saveFavourites}>Save favourites file</button>
+          <button class="btn" onclick={() => restoreInput?.click()}>Restore favourites file</button>
+        </div>
       </section>
 
       <section class="panel stack">
         <h3>Move favourites from the old Streamlit app</h3>
         <p class="muted small">
-          The old apps kept them in <code>~/.insta_vault_markers.json</code> or <code>~/.twitter_vault_markers.json</code>. First add the
-          same files you used there, then pick which app the file came from and choose <em>Restore from backup</em>.
+          The old apps kept them by row number, in <code>~/.insta_vault_markers.json</code>, <code>~/.twitter_vault_markers.json</code> or a
+          GitHub gist. First add the same <code>saved_posts.csv</code> or <code>like.js</code> the old app used, pick which app the file came
+          from, then choose the file.
         </p>
         <div class="segmented" role="group" aria-label="Old file belongs to">
           {#each SOURCES as s (s)}
@@ -158,6 +106,8 @@
         </div>
         <button class="btn" onclick={() => restoreInput?.click()}>Choose old file</button>
       </section>
+
+      {#if restoreMsg}<p class="small" role="status">{restoreMsg}</p>{/if}
 
       <section class="stack about">
         <h3>Keyboard shortcuts</h3>

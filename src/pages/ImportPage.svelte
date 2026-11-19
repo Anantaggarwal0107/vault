@@ -4,7 +4,6 @@
   import { router } from '../lib/router.svelte';
   import { ui } from '../lib/ui.svelte';
   import { fmtDate, fmtNum } from '../lib/text';
-  import { migrateAfterImport } from '../lib/sync';
   import type { Source } from '../lib/types';
   import Icon from '../components/Icon.svelte';
 
@@ -37,6 +36,7 @@
     notes = [];
     try {
       const r = await readFiles(files, (s) => (status = s));
+      const inputBytes = files.reduce((n, f) => n + f.size, 0);
       notes = r.notes;
       const done: string[] = [];
       if (r.instagram?.length || r.x?.length) await vault.clearDemo();
@@ -52,12 +52,16 @@
         await vault.replaceItems('x', r.x, (n) => (status = `Saving your X likes… ${Math.round((n / xTotal) * 100)}%`));
         done.push(`${fmtNum(r.x.length)} X likes`);
       }
+      if (r.marks) {
+        status = 'Adding your favourites…';
+        await vault.mergeState(r.marks);
+        done.push(`favourites for ${fmtNum(r.marks.markers.length)} posts`);
+      }
       if (done.length) {
-        vault.setSource(r.instagram?.length ? 'instagram' : 'x');
-        ui.toast(`Added ${done.join(' and ')}.`);
-        migrateAfterImport()
-          .then((m) => m && ui.toast(m))
-          .catch((e) => ui.toast(`Couldn't move old favourites from your gist: ${(e as Error).message}`));
+        if (r.instagram?.length || r.x?.length) vault.setSource(r.instagram?.length ? 'instagram' : 'x');
+        ui.toast(`Added ${done.length > 1 ? `${done.slice(0, -1).join(', ')} and ${done.at(-1)}` : done[0]}.`);
+        // Big exports: offer to save a small copy for other devices.
+        ui.offerCopy = r.instagram?.length && inputBytes > 30 * 1048576 ? inputBytes : 0;
         if (!notes.length) router.go('random');
       } else if (!notes.length) {
         error = "Those files don't have any saved posts or likes in them. Choose the zip file Instagram or X emailed you.";

@@ -1,5 +1,7 @@
 import { BlobReader, TextWriter, ZipReader } from '@zip.js/zip.js';
 import type { Item, Source } from '../types';
+import type { MarkState } from '../merge';
+import { docState, isMarkersDoc, MARKERS_FILE } from '../markers-file';
 import { InstagramHtmlReader, parseInstagramCsv, parseInstagramJson } from './instagram';
 import { likesToItems, parseLikeJs } from './x';
 
@@ -7,6 +9,8 @@ export interface ImportResult {
   instagram: Item[] | null;
   x: Item[] | null;
   notes: string[];
+  /** Favourites found in a Vault copy or favourites file. */
+  marks: MarkState | null;
 }
 
 const LIKE_FILE_RE = /(^|\/)like(?:-part(\d+))?\.js$/i;
@@ -73,6 +77,7 @@ export async function readFiles(files: File[], onStatus?: (msg: string) => void)
   const igParts: Item[][] = [];
   const likeFiles: { part: number; text: string }[] = [];
   const notes: string[] = [];
+  let marks: MarkState | null = null;
 
   for (const file of files) {
     onStatus?.(`Reading ${file.name}…`);
@@ -84,7 +89,10 @@ export async function readFiles(files: File[], onStatus?: (msg: string) => void)
         let found = 0;
         for (const entry of entries) {
           if (entry.directory || !('getData' in entry) || !entry.getData) continue;
-          if (LIKE_FILE_RE.test(entry.filename)) {
+          if (entry.filename.split('/').pop() === MARKERS_FILE) {
+            const doc = JSON.parse(await entry.getData(new TextWriter()));
+            if (isMarkersDoc(doc)) marks = docState(doc);
+          } else if (LIKE_FILE_RE.test(entry.filename)) {
             likeFiles.push({ part: likePart(entry.filename), text: await entry.getData(new TextWriter()) });
             found++;
           } else if (IG_SAVED_RE.test(entry.filename)) {
@@ -116,7 +124,9 @@ export async function readFiles(files: File[], onStatus?: (msg: string) => void)
     } else if (kind === 'ig-html') {
       igParts.push(await readHtmlStream(file.stream(), file.size, onStatus));
     } else if (kind === 'ig-json') {
-      igParts.push(parseInstagramJson(JSON.parse(await file.text())));
+      const data = JSON.parse(await file.text());
+      if (isMarkersDoc(data)) marks = docState(data);
+      else igParts.push(parseInstagramJson(data));
     } else if (kind === 'ig-csv') {
       igParts.push(parseInstagramCsv(await file.text()));
     } else {
@@ -140,7 +150,7 @@ export async function readFiles(files: File[], onStatus?: (msg: string) => void)
     x = likesToItems(likeFiles.flatMap((f) => parseLikeJs(f.text)));
   }
 
-  return { instagram, x, notes };
+  return { instagram, x, notes, marks };
 }
 
 export function countBySource(r: ImportResult): Partial<Record<Source, number>> {

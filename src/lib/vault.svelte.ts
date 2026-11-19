@@ -1,5 +1,6 @@
 import { db } from './db';
 import { DEMO_PREFIX, demoItems, isDemo } from './demo';
+import { mergeStates, type MarkState } from './merge';
 import { hashtags, mentions } from './text';
 import type { Item, Marker, MarkKind, Pool, Source } from './types';
 
@@ -160,6 +161,17 @@ class Vault {
     this.changed();
   }
 
+  /**
+   * Merge marks from a backup or a copy of everything into this device: for each post the
+   * newest change wins. Counts as a change, so Google Drive sync picks it up.
+   */
+  async mergeState(incoming: MarkState) {
+    const local: MarkState = { markers: [...this.markers.values()], removed: [...this.removed.entries()] };
+    const merged = mergeStates(local, incoming);
+    await this.applySynced(merged.markers, merged.removed);
+    this.emit();
+  }
+
   /** Replace marks and removals with the result of a sync merge. Doesn't trigger another sync. */
   async applySynced(markers: Marker[], removed: [string, number][]) {
     // Swap the in-memory maps first so a tap during the write lands on the new state.
@@ -174,10 +186,12 @@ class Vault {
     });
   }
 
+  /** Marks on posts that are in the vault (marks on posts missing from the latest export are kept but not counted). */
   count(source: Source, kind: MarkKind): number {
     void this.version;
+    const keys = keySet(this.items[source]);
     let n = 0;
-    for (const m of this.markers.values()) if (m.kind === kind && m.key.startsWith(`${source}:`)) n++;
+    for (const m of this.markers.values()) if (m.kind === kind && keys.has(m.key)) n++;
     return n;
   }
 
@@ -236,6 +250,8 @@ function countSorted(keys: Iterable<string>): [string, number][] {
 
 /** [username, saved count], most saved first. */
 export const creatorCounts = memo((items) => countSorted(items.filter((i) => i.author).map((i) => i.author)));
+
+export const keySet = memo((items) => new Set(items.map((i) => i.key)));
 
 export const creatorCountMap = memo((items) => new Map(creatorCounts(items)));
 

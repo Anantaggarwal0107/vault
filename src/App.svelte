@@ -3,7 +3,6 @@
   import { vault } from './lib/vault.svelte';
   import { router, type Page } from './lib/router.svelte';
   import { ui } from './lib/ui.svelte';
-  import { startSync } from './lib/sync';
   import { drive } from './lib/drive.svelte';
   import { SOURCES, SOURCE_LABEL } from './lib/types';
   import Icon, { type IconName } from './components/Icon.svelte';
@@ -22,11 +21,11 @@
     // Ask the browser not to evict our data under storage pressure
     // (and on iOS, after 7 days without a visit). Granted automatically for installed apps.
     void navigator.storage?.persist?.().catch(() => {});
+    // GitHub gist sync was removed; forget any token an earlier version stored.
+    for (const k of ['vault.gist', 'vault.gist.dirty', 'vault.legacyDone']) localStorage.removeItem(k);
     try {
       await vault.load();
       drive.start();
-      const msg = await startSync((m) => ui.toast(m));
-      if (msg && !msg.startsWith('Synced')) ui.toast(msg);
     } catch (e) {
       loadError = (e as Error).message;
     }

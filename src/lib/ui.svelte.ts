@@ -29,6 +29,8 @@ class UI {
   randomPick = $state<Record<Source, Item | null>>({ instagram: null, x: null });
   randomPool = $state<Record<Source, Pool>>({ instagram: 'all', x: 'all' });
   showPreview = $state(localStorage.getItem('vault.preview') !== 'off');
+  /** Size of a big export just imported, so we can offer a small copy (0 = don't offer). */
+  offerCopy = $state(0);
 
   private nextId = 1;
 

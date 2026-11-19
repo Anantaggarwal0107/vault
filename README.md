@@ -28,12 +28,15 @@ Without a client id the Drive option is simply hidden.
 
 | Source | Files |
 |---|---|
-| Instagram | export `.zip` (HTML or JSON), `saved_posts.html` / `.json`, or the old `saved_posts.csv` |
+| Instagram | export `.zip` (HTML or JSON, streamed so 400 MB+ exports work on phones), `saved_posts.html` / `.json`, or a `saved_posts.csv` |
+| Vault copy | the zip from **Save a copy of everything** (posts, likes and favourites) |
 | X | archive `.zip`, or `data/like.js` (`like-part1.js`, … are supported) |
 
 ## Layout
 
 - `src/lib/parse/`: export parsers. Old Streamlit row ids are recorded as `legacyIds` so old marker files can be migrated.
 - `src/lib/vault.svelte.ts`: items + markers state, IndexedDB persistence, cached indexes.
-- `src/lib/sync.ts`: backup/restore, old-marker migration, Gist sync.
+- `src/lib/drive.svelte.ts` + `src/lib/merge.ts`: Google Drive sync of favourites, merging devices (newest change per post wins).
+- `src/lib/compact.ts`: "Save a copy of everything", a small zip (posts CSV with captions, like.js, favourites) that Vault re-imports.
+- `src/lib/sync.ts`: favourites files and moving favourites from the old Streamlit apps (by row number).
 - `src/pages/`: Random, Browse (Timeline/Search), People (Creators/Tags), Marked, Stats, Settings, Import.

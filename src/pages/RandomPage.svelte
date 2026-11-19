@@ -9,6 +9,7 @@
   import ItemRow from '../components/ItemRow.svelte';
   import InstallCard from '../components/InstallCard.svelte';
   import SyncCard from '../components/SyncCard.svelte';
+  import CopyCard from '../components/CopyCard.svelte';
   import { install } from '../lib/install.svelte';
 
   const POOLS: { id: Pool; label: string }[] = [
@@ -94,7 +95,9 @@
 
 <div class="random">
   {#if !vault.isDemo}
-    {#if install.available && !install.dismissed}<InstallCard />{:else}<SyncCard prompt />{/if}
+    {#if ui.offerCopy}<CopyCard offer />
+    {:else if install.available && !install.dismissed}<InstallCard />
+    {:else}<SyncCard prompt />{/if}
   {/if}
   <div class="segmented" role="group" aria-label="Draw from">
     {#each POOLS as p (p.id)}
