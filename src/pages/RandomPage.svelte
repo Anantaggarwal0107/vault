@@ -29,6 +29,25 @@
   let poolSize = $derived(vault.pool(pool).length);
   let draws = $state(0);
 
+  // With the preview on, size it to exactly the space between the header and the bottom bar.
+  let slot: HTMLElement | undefined = $state();
+  let bar: HTMLElement | undefined = $state();
+  let fitH = $state(420);
+
+  function measure() {
+    if (!slot || !bar) return;
+    const slotTop = slot.getBoundingClientRect().top + window.scrollY;
+    const barTop = bar.getBoundingClientRect().top;
+    fitH = Math.max(280, Math.floor(barTop - slotTop - 10));
+  }
+
+  $effect(() => {
+    void pick?.key;
+    void ui.showPreview;
+    void slot;
+    requestAnimationFrame(measure);
+  });
+
   // Shrink long handles so they fit on one line instead of breaking mid-word.
   let whoSize = $derived.by(() => {
     const len = (pick?.author.length ?? 7) + 1;
@@ -91,22 +110,77 @@
   }
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onresize={measure} />
 
-<div class="random">
-  {#if !vault.isDemo}
-    {#if ui.offerCopy}<CopyCard offer />
-    {:else if install.available && !install.dismissed}<InstallCard />
-    {:else}<SyncCard prompt />{/if}
-  {/if}
+{#snippet actionButtons(compact: boolean)}
+  <button
+    class={compact ? 'icon-btn' : 'btn'}
+    class:on-fav={compact && mark === 'fav'}
+    class:fav-on={!compact && mark === 'fav'}
+    aria-pressed={mark === 'fav'}
+    aria-label={mark === 'fav' ? 'Remove favourite' : 'Favourite'}
+    onclick={() => vault.toggle(pick!, 'fav')}
+  >
+    <Icon name="star" size={compact ? 22 : 20} filled={mark === 'fav'} />{#if !compact}<span class="lbl">Favourite</span>{/if}
+  </button>
+  <button
+    class={compact ? 'icon-btn' : 'btn'}
+    class:on-del={compact && mark === 'del'}
+    class:del-on={!compact && mark === 'del'}
+    aria-pressed={mark === 'del'}
+    aria-label={mark === 'del' ? 'Unmark as gone' : 'Mark as gone'}
+    onclick={() => vault.toggle(pick!, 'del')}
+  >
+    <Icon name="trash" size={compact ? 22 : 20} />{#if !compact}<span class="lbl">Gone</span>{/if}
+  </button>
+  <button
+    class={compact ? 'icon-btn' : 'btn'}
+    class:on-preview={compact && ui.showPreview}
+    aria-pressed={ui.showPreview}
+    aria-label={ui.showPreview ? 'Hide preview' : 'Show preview'}
+    onclick={() => ui.togglePreview()}
+  >
+    <Icon name="eye" size={compact ? 22 : 20} />{#if !compact}<span class="lbl">Preview</span>{/if}
+  </button>
+  <button class={compact ? 'icon-btn' : 'btn'} aria-label="More details" onclick={() => (ui.detail = pick)}>
+    <Icon name="more" size={compact ? 22 : 20} />{#if !compact}<span class="lbl">More</span>{/if}
+  </button>
+{/snippet}
+
+<div class="random" class:previewing={pick && ui.showPreview}>
   <div class="segmented" role="group" aria-label="Draw from">
     {#each POOLS as p (p.id)}
       <button aria-pressed={pool === p.id} onclick={() => setPool(p.id)}>{p.label}</button>
     {/each}
   </div>
-  <p class="muted small pool-count num">{fmtNum(poolSize)} to draw from</p>
 
-  {#if pick}
+  {#if pick && ui.showPreview}
+    <!-- Preview on: a slim header and the preview filling the rest of the screen, so nothing needs scrolling. -->
+    {#key draws}
+      <article class="mini" class:del={mark === 'del'}>
+        <div class="mini-top">
+          <button class="mini-who" onclick={() => (ui.detail = pick)}>
+            {#if pick.source === 'instagram'}
+              <span class="mini-name">@{pick.author || 'unknown'}</span>
+            {:else}
+              <span class="mini-name tweet">{previewText(pick.text)}</span>
+            {/if}
+            <span class="mini-meta">
+              <span class="num">{pick.source === 'x' ? 'Posted' : 'Saved'} {fmtDate(pick.savedAt)}</span>
+              {#if mark === 'fav'}<span class="badge fav"><Icon name="star" size={14} filled /> Favourite</span>{/if}
+              {#if mark === 'del'}<span class="badge"><Icon name="trash" size={14} /> Gone</span>{/if}
+            </span>
+          </button>
+          <div class="mini-actions">{@render actionButtons(true)}</div>
+        </div>
+        {#if pick.source === 'instagram' && pick.text}<p class="mini-caption">{pick.text}</p>{/if}
+      </article>
+    {/key}
+    <div class="fit-slot" bind:this={slot} style:height="{fitH}px">
+      <Embed item={pick} fit />
+    </div>
+  {:else if pick}
+    <p class="muted small pool-count num">{fmtNum(poolSize)} to draw from</p>
     {#key draws}
       <article class="card" class:del={mark === 'del'}>
         {#if pick.source === 'instagram'}
@@ -125,32 +199,19 @@
         </div>
       </article>
     {/key}
-
-    <a class="btn primary lg block" href={openUrl(pick)} target="_blank" rel="noopener">
-      <Icon name="open" size={20} /> Open in {pick.source === 'x' ? 'X' : 'Instagram'}
-    </a>
-
-    <div class="actions">
-      <button class="btn" class:fav-on={mark === 'fav'} aria-pressed={mark === 'fav'} onclick={() => vault.toggle(pick!, 'fav')}>
-        <Icon name="star" size={20} filled={mark === 'fav'} /><span class="lbl">Favourite</span>
-      </button>
-      <button class="btn" class:del-on={mark === 'del'} aria-pressed={mark === 'del'} onclick={() => vault.toggle(pick!, 'del')}>
-        <Icon name="trash" size={20} /><span class="lbl">Gone</span>
-      </button>
-      <button class="btn" aria-pressed={ui.showPreview} onclick={() => ui.togglePreview()}>
-        <Icon name="eye" size={20} /><span class="lbl">Preview</span>
-      </button>
-      <button class="btn" onclick={() => (ui.detail = pick)}>
-        <Icon name="more" size={20} /><span class="lbl">More</span>
-      </button>
-    </div>
-
-    {#if ui.showPreview}<Embed item={pick} />{/if}
+    <div class="actions">{@render actionButtons(false)}</div>
   {:else}
+    <p class="muted small pool-count num">{fmtNum(poolSize)} to draw from</p>
     <article class="card empty">
       <p class="who dim">Nothing drawn yet</p>
       <p class="muted">Draw a random {source === 'x' ? 'like' : 'save'} and see what past you thought was worth keeping.</p>
     </article>
+  {/if}
+
+  {#if !vault.isDemo}
+    {#if ui.offerCopy}<CopyCard offer />
+    {:else if install.available && !install.dismissed}<InstallCard />
+    {:else}<SyncCard prompt />{/if}
   {/if}
 
   {#if onThisDay.length}
@@ -176,11 +237,18 @@
 
   <p class="keys muted small">Keys: <kbd>R</kbd> draw, <kbd>F</kbd> favourite, <kbd>D</kbd> gone, <kbd>O</kbd> open, <kbd>P</kbd> preview</p>
 
-  <div class="draw-bar">
-    <button class="btn primary lg block draw" onclick={draw}>
-      <Icon name="dice" size={22} />
-      {pick ? 'Draw another' : 'Draw a random post'}
-    </button>
+  <div class="draw-bar" bind:this={bar}>
+    <div class="bar-inner" class:two={!!pick}>
+      {#if pick}
+        <a class="btn lg open" href={openUrl(pick)} target="_blank" rel="noopener">
+          <Icon name="open" size={20} /> Open
+        </a>
+      {/if}
+      <button class="btn primary lg draw" onclick={draw}>
+        <Icon name="dice" size={22} />
+        {pick ? 'Draw another' : 'Draw a random post'}
+      </button>
+    </div>
   </div>
 </div>
 
@@ -404,13 +472,123 @@
     bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
     z-index: 20;
     padding: 10px 16px 12px;
-    background: linear-gradient(to top, var(--night) 70%, transparent);
+    background: var(--night);
+    box-shadow: 0 -10px 16px var(--night);
   }
 
-  .draw {
+  .bar-inner {
+    display: grid;
+    gap: 10px;
     max-width: var(--content);
     margin: 0 auto;
+  }
+
+  .bar-inner.two {
+    grid-template-columns: 2fr 3fr;
+  }
+
+  .bar-inner .btn {
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  }
+
+  .open {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--seam));
+    color: var(--accent);
+  }
+
+  /* ── preview mode: slim header + fitted preview ── */
+  .random.previewing {
+    gap: 10px;
+  }
+
+  .mini {
+    display: grid;
+    gap: 6px;
+    animation: deal 0.3s cubic-bezier(0.2, 0.9, 0.25, 1.15);
+  }
+
+  .mini-top {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .mini-who {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .mini-name {
+    font-family: var(--display);
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mini-name.tweet {
+    font-size: 1.02rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .mini.del .mini-name {
+    color: var(--faint);
+  }
+
+  .mini-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.82rem;
+    color: var(--accent);
+  }
+
+  .mini-meta .badge {
+    font-size: 0.8rem;
+  }
+
+  .mini-actions {
+    display: flex;
+    flex: none;
+  }
+
+  .mini-actions :global(.on-preview) {
+    color: var(--accent);
+  }
+
+  .mini-caption {
+    color: var(--mist);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* The extra space below keeps whatever comes next out of sight behind the bottom bar until you scroll. */
+  .fit-slot {
+    min-height: 280px;
+    margin-bottom: 120px;
   }
 
   @media (min-width: 900px) {

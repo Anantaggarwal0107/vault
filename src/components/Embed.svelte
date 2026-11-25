@@ -3,7 +3,8 @@
   import { embedUrl } from '../lib/links';
   import { isDemo } from '../lib/demo';
 
-  let { item }: { item: Item } = $props();
+  /** `fit`: fill the parent's height (the parent sets it) and use the shorter preview. */
+  let { item, fit = false }: { item: Item; fit?: boolean } = $props();
 
   let frame: HTMLIFrameElement | undefined = $state();
   // Keyed by item so switching posts never shows the previous post's state.
@@ -42,14 +43,14 @@
 {#if isDemo(item)}
   <div class="embed sample muted small">This is a sample post. Previews show here for your own posts.</div>
 {:else}
-<div class="embed" class:ready={loaded}>
+<div class="embed" class:ready={loaded} class:fit>
   {#if !loaded}<div class="placeholder muted small">Loading preview…</div>{/if}
   {#key item.key}
     <iframe
       bind:this={frame}
-      src={embedUrl(item)}
+      src={embedUrl(item, fit)}
       title="Preview of this post"
-      style:height="{height || fallback}px"
+      style:height={fit ? '100%' : `${height || fallback}px`}
       onload={() => (loadedKey = item.key)}
       allow="autoplay; encrypted-media; picture-in-picture; clipboard-write"
       referrerpolicy="strict-origin-when-cross-origin"
@@ -59,6 +60,14 @@
 {/if}
 
 <style>
+  .embed.fit {
+    height: 100%;
+  }
+
+  .embed.fit iframe {
+    max-height: none;
+  }
+
   .embed {
     position: relative;
     border-radius: 16px;

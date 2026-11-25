@@ -34,10 +34,13 @@ export function openUrl(item: Item): string {
   return isMobile ? `twitter://status?id=${item.id}` : webUrl(item);
 }
 
-/** Url for the embeddable preview. */
-export function embedUrl(item: Item): string {
+/**
+ * Url for the embeddable preview. `compact` drops Instagram's caption and comments block,
+ * which keeps the preview short enough to fit on a phone screen with the post itself.
+ */
+export function embedUrl(item: Item, compact = false): string {
   if (item.source === 'x') {
     return `https://platform.twitter.com/embed/Tweet.html?id=${item.id}&theme=dark&dnt=true`;
   }
-  return `https://www.instagram.com/${igKind(item.kind)}/${item.id}/embed/captioned/`;
+  return `https://www.instagram.com/${igKind(item.kind)}/${item.id}/embed/${compact ? '' : 'captioned/'}`;
 }
