@@ -131,7 +131,10 @@ class Drive {
         localStorage.setItem(K.needsSignIn, '1');
         this.status = 'signin';
       } else {
-        this.message = error === 'access_denied' ? 'Google sign-in was cancelled.' : `Google sign-in didn't finish (${error}).`;
+        this.message =
+          error === 'access_denied'
+            ? "Google sign-in didn't go through: it was cancelled, or Google blocked it."
+            : `Google sign-in didn't finish (${error}).`;
       }
       return;
     }

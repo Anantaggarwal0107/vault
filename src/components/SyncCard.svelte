@@ -31,6 +31,7 @@
         <p class="muted small">
           Sign in with Google and your favourites are backed up and kept the same on every phone and computer you use. They're saved in a
           private Vault folder in your own Google Drive. Vault can't see anything else in your Drive.
+          <a href="./privacy.html" target="_blank" rel="noopener">Privacy policy</a>
         </p>
       </div>
       <div class="row wrap">

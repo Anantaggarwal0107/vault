@@ -110,6 +110,8 @@
       {#if restoreMsg}<p class="small" role="status">{restoreMsg}</p>{/if}
 
       <section class="stack about">
+        <h3>Privacy</h3>
+        <p class="muted small">Your posts never leave your device. <a href="./privacy.html" target="_blank" rel="noopener">Read the privacy policy</a>.</p>
         <h3>Keyboard shortcuts</h3>
         <p class="muted small">
           On the Random tab: <kbd>R</kbd> or <kbd>Space</kbd> draws, <kbd>F</kbd> favourites, <kbd>D</kbd> marks as gone, <kbd>O</kbd> opens,
