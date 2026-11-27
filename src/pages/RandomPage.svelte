@@ -31,21 +31,42 @@
 
   // With the preview on, size it to exactly the space between the header and the bottom bar.
   let slot: HTMLElement | undefined = $state();
+  let info: HTMLElement | undefined = $state();
   let bar: HTMLElement | undefined = $state();
   let fitH = $state(420);
 
   function measure() {
-    if (!slot || !bar) return;
+    if (!slot || !bar || !info) return;
     const slotTop = slot.getBoundingClientRect().top + window.scrollY;
     const barTop = bar.getBoundingClientRect().top;
-    fitH = Math.max(280, Math.floor(barTop - slotTop - 10));
+    fitH = Math.max(260, Math.floor(barTop - slotTop - info.offsetHeight - 20));
   }
 
   $effect(() => {
     void pick?.key;
     void ui.showPreview;
     void slot;
+    void info;
     requestAnimationFrame(measure);
+  });
+
+  // One line of caption under the preview; "more" opens the full text over the preview.
+  let captionOpen = $state(false);
+  let lineEl: HTMLElement | undefined = $state();
+  let overflows = $state(false);
+  let longText = $derived(pick ? (pick.source === 'x' ? previewText(pick.text) : pick.text) : '');
+
+  $effect(() => {
+    void pick?.key;
+    captionOpen = false;
+  });
+
+  $effect(() => {
+    void longText;
+    void lineEl;
+    requestAnimationFrame(() => {
+      overflows = !!lineEl && lineEl.scrollWidth > lineEl.clientWidth + 1;
+    });
   });
 
   // Shrink long handles so they fit on one line instead of breaking mid-word.
@@ -114,36 +135,36 @@
 
 {#snippet actionButtons(compact: boolean)}
   <button
-    class={compact ? 'icon-btn' : 'btn'}
+    class={compact ? 'ctl' : 'btn'}
     class:on-fav={compact && mark === 'fav'}
     class:fav-on={!compact && mark === 'fav'}
     aria-pressed={mark === 'fav'}
     aria-label={mark === 'fav' ? 'Remove favourite' : 'Favourite'}
     onclick={() => vault.toggle(pick!, 'fav')}
   >
-    <Icon name="star" size={compact ? 22 : 20} filled={mark === 'fav'} />{#if !compact}<span class="lbl">Favourite</span>{/if}
+    <Icon name="star" size={compact ? 26 : 20} filled={mark === 'fav'} />{#if !compact}<span class="lbl">Favourite</span>{/if}
   </button>
   <button
-    class={compact ? 'icon-btn' : 'btn'}
+    class={compact ? 'ctl' : 'btn'}
     class:on-del={compact && mark === 'del'}
     class:del-on={!compact && mark === 'del'}
     aria-pressed={mark === 'del'}
     aria-label={mark === 'del' ? 'Unmark as gone' : 'Mark as gone'}
     onclick={() => vault.toggle(pick!, 'del')}
   >
-    <Icon name="trash" size={compact ? 22 : 20} />{#if !compact}<span class="lbl">Gone</span>{/if}
+    <Icon name="trash" size={compact ? 26 : 20} />{#if !compact}<span class="lbl">Gone</span>{/if}
   </button>
   <button
-    class={compact ? 'icon-btn' : 'btn'}
+    class={compact ? 'ctl' : 'btn'}
     class:on-preview={compact && ui.showPreview}
     aria-pressed={ui.showPreview}
     aria-label={ui.showPreview ? 'Hide preview' : 'Show preview'}
     onclick={() => ui.togglePreview()}
   >
-    <Icon name="eye" size={compact ? 22 : 20} />{#if !compact}<span class="lbl">Preview</span>{/if}
+    <Icon name="eye" size={compact ? 26 : 20} />{#if !compact}<span class="lbl">Preview</span>{/if}
   </button>
-  <button class={compact ? 'icon-btn' : 'btn'} aria-label="More details" onclick={() => (ui.detail = pick)}>
-    <Icon name="more" size={compact ? 22 : 20} />{#if !compact}<span class="lbl">More</span>{/if}
+  <button class={compact ? 'ctl' : 'btn'} aria-label="More details" onclick={() => (ui.detail = pick)}>
+    <Icon name="more" size={compact ? 26 : 20} />{#if !compact}<span class="lbl">More</span>{/if}
   </button>
 {/snippet}
 
@@ -156,29 +177,36 @@
 
   {#if pick && ui.showPreview}
     <!-- Preview on: a slim header and the preview filling the rest of the screen, so nothing needs scrolling. -->
+    <div class="fit-slot" bind:this={slot} style:height="{fitH}px">
+      <Embed item={pick} fit />
+      {#if captionOpen}
+        <div class="cap-panel" role="dialog" aria-label="Full caption">
+          <p class="cap-text">{longText}</p>
+          <button class="cap-less" onclick={() => (captionOpen = false)}>less</button>
+        </div>
+      {/if}
+    </div>
     {#key draws}
-      <article class="mini" class:del={mark === 'del'}>
-        <div class="mini-top">
+      <article class="info" class:del={mark === 'del'} bind:this={info}>
+        <div class="info-top">
           <button class="mini-who" onclick={() => (ui.detail = pick)}>
             {#if pick.source === 'instagram'}
               <span class="mini-name">@{pick.author || 'unknown'}</span>
             {:else}
-              <span class="mini-name tweet">{previewText(pick.text)}</span>
+              <span class="mini-name small-name num" title="Posted">{fmtDate(pick.savedAt)}</span>
             {/if}
-            <span class="mini-meta">
-              <span class="num">{pick.source === 'x' ? 'Posted' : 'Saved'} {fmtDate(pick.savedAt)}</span>
-              {#if mark === 'fav'}<span class="badge fav"><Icon name="star" size={14} filled /> Favourite</span>{/if}
-              {#if mark === 'del'}<span class="badge"><Icon name="trash" size={14} /> Gone</span>{/if}
-            </span>
           </button>
           <div class="mini-actions">{@render actionButtons(true)}</div>
         </div>
-        {#if pick.source === 'instagram' && pick.text}<p class="mini-caption">{pick.text}</p>{/if}
+        <p class="info-line">
+          {#if pick.source === 'instagram'}<span class="date num">Saved {fmtDate(pick.savedAt)}</span>{/if}
+          {#if longText}
+            <span class="one" bind:this={lineEl}>{longText}</span>
+            {#if overflows}<button class="more" onclick={() => (captionOpen = !captionOpen)}>{captionOpen ? 'less' : 'more'}</button>{/if}
+          {/if}
+        </p>
       </article>
     {/key}
-    <div class="fit-slot" bind:this={slot} style:height="{fitH}px">
-      <Embed item={pick} fit />
-    </div>
   {:else if pick}
     <p class="muted small pool-count num">{fmtNum(poolSize)} to draw from</p>
     {#key draws}
@@ -501,17 +529,7 @@
     gap: 10px;
   }
 
-  .mini {
-    display: grid;
-    gap: 6px;
-    animation: deal 0.3s cubic-bezier(0.2, 0.9, 0.25, 1.15);
-  }
 
-  .mini-top {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
 
   .mini-who {
     flex: 1;
@@ -536,58 +554,164 @@
     text-overflow: ellipsis;
   }
 
-  .mini-name.tweet {
-    font-size: 1.02rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
 
-  .mini.del .mini-name {
-    color: var(--faint);
-  }
 
-  .mini-meta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    font-size: 0.82rem;
-    color: var(--accent);
-  }
 
-  .mini-meta .badge {
-    font-size: 0.8rem;
-  }
 
   .mini-actions {
     display: flex;
     flex: none;
   }
 
-  .mini-actions :global(.on-preview) {
+  .mini-actions {
+    gap: 6px;
+  }
+
+  /* The controls under the preview: bigger targets than plain icon buttons. */
+  .ctl {
+    display: inline-grid;
+    place-items: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+    border: 1px solid var(--seam);
+    background: var(--dusk-2);
+    color: var(--paper);
+    cursor: pointer;
+    flex: none;
+  }
+
+  .ctl:active {
+    transform: scale(0.95);
+  }
+
+  .ctl[aria-pressed='true'] {
+    border-color: transparent;
+  }
+
+  .ctl.on-fav {
+    background: var(--gold);
+    color: #2a2000;
+  }
+
+  .ctl.on-del {
+    background: #4a3550;
+  }
+
+  .ctl.on-preview {
+    background: color-mix(in srgb, var(--accent) 22%, var(--dusk-2));
     color: var(--accent);
   }
 
-  .mini-caption {
-    color: var(--mist);
-    font-size: 0.9rem;
-    line-height: 1.4;
-    word-break: break-word;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+  @media (max-width: 370px) {
+    .ctl {
+      width: 46px;
+      height: 46px;
+    }
   }
+
+  .info {
+    display: grid;
+    gap: 4px;
+  }
+
+  .info-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .small-name {
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+    color: var(--accent);
+  }
+
+  .info.del .mini-name {
+    color: var(--faint);
+  }
+
+  .info-line {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    font-size: 0.9rem;
+    color: var(--mist);
+  }
+
+  .info-line .date {
+    flex: none;
+    color: var(--accent);
+  }
+
+  .info-line .one {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .more,
+  .cap-less {
+    flex: none;
+    padding: 4px 2px;
+    border: none;
+    background: none;
+    color: var(--paper);
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+
+  /* Full caption slides up over the bottom of the preview, so nothing else moves. */
+  .cap-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    max-height: 60%;
+    overflow-y: auto;
+    padding: 16px 16px 10px;
+    border-radius: 0 0 16px 16px;
+    background: color-mix(in srgb, var(--dusk) 96%, transparent);
+    border-top: 1px solid var(--seam);
+    box-shadow: 0 -12px 24px rgb(0 0 0 / 0.35);
+    animation: capup 0.2s ease-out;
+    display: grid;
+    gap: 6px;
+  }
+
+  @keyframes capup {
+    from {
+      transform: translateY(16px);
+      opacity: 0;
+    }
+  }
+
+  .cap-text {
+    color: var(--paper);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .cap-less {
+    justify-self: end;
+  }
+
 
   /* The extra space below keeps whatever comes next out of sight behind the bottom bar until you scroll. */
   .fit-slot {
-    min-height: 280px;
+    position: relative;
+    min-height: 260px;
+  }
+
+  /* Keeps whatever comes next out of sight behind the bottom bar until you scroll. */
+  .random.previewing .info {
     margin-bottom: 120px;
   }
 
